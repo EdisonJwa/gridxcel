@@ -89,6 +89,9 @@ describe("interop: read path diffed against live openpyxl", { skip: SKIP_READ ||
   });
 });
 
+// The manifest comparisons below read only golden.json, which is checked in and
+// needs no python. The one exception is the eachRow test, which asks the live
+// oracle for the format tables; it carries its own guard and skips without it.
 describe("interop: pre-recorded golden manifest", { skip: SKIP_READ }, () => {
   test("golden.xlsx matches test/fixtures/golden.json (cellDates:true)", async () => {
     const mod = await load(READ_PATH);
@@ -107,7 +110,9 @@ describe("interop: pre-recorded golden manifest", { skip: SKIP_READ }, () => {
 
   // The streaming path is gridxcel's headline claim: verify its cell values
   // against the same pre-recorded python manifest, not just its row count.
-  test("eachRow streams the manifest cells (golden.xlsx)", async () => {
+  // This one needs the live oracle for its format tables, so it skips on its own
+  // rather than relying on the block guard, which only knows about src/read.js.
+  test("eachRow streams the manifest cells (golden.xlsx)", { skip: SKIP_ORACLE }, async () => {
     const index = await import(pathToFileURL(path.join(ROOT, "src", "index.js")).href);
     assert.equal(typeof index.eachRow, "function", "src/index.js must export eachRow");
     const events = [];

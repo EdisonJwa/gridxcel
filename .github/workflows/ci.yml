@@ -18,11 +18,27 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         node: ["18", "20", "22", "24"]
+        include:
+          # Exactly one leg installs the oracle. The rest exercise the skip path,
+          # which is the configuration a developer without python actually has.
+          - os: ubuntu-latest
+            node: "22"
+            oracle: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      # The oracle must be installed BEFORE the suite runs. It was previously set
+      # up in a later step, so `npm test` had no openpyxl: every interop suite
+      # skipped and one - which called the oracle without a guard - failed.
+      # Installing it here means the strongest check in the repository actually
+      # runs on the legs that claim to run it.
+      - name: Python oracle
+        if: matrix.oracle
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet openpyxl XlsxWriter lxml
       # No dependencies and no build step, so there is nothing to install and
       # nothing to cache: the suite runs the files in src/ exactly as they ship.
       # scripts/run-tests.mjs builds the test file list in Node rather than
@@ -62,13 +78,10 @@ jobs:
           cd integration
           npm install --no-audit --no-fund
           node real-browser.test.mjs
+      # The full harness on the leg that has python: it diffs every fixture in
+      # both directions, which the node:test copy only partly mirrors.
+      - name: Interop harness
+        if: matrix.oracle
+        run: npm run interop
       - name: Examples
         run: node examples/run-all.mjs
-      # The oracle needs python with openpyxl and XlsxWriter. It is the strongest
-      # check in the repository - it diffs every read and write path against an
-      # independent implementation - so it runs on one leg rather than none.
-      - name: Python oracle
-        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
-        run: |
-          python -m pip install --quiet openpyxl XlsxWriter
-          npm run interop
