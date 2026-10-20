@@ -27,16 +27,25 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcDir = join(root, "src");
 const asJson = process.argv.includes("--json");
 
-/** Entry point -> source file, matching package.json "exports". */
-const ENTRIES = [
-  ["gridxcel", "index.js"],
-  ["gridxcel/compat", "compat.js"],
-  ["gridxcel/csv", "csv.js"],
-  ["gridxcel/json", "json.js"],
-  ["gridxcel/xml", "xml.js"],
-  ["gridxcel/numfmt", "numfmt.js"],
-  ["gridxcel/zip", "zip.js"],
-];
+/**
+ * Entry point -> source file, derived from package.json "exports".
+ *
+ * This used to be a hand-written table, which meant adding an entry point to the
+ * package did not add it to this check - so its exports were never verified as
+ * documented. Reading the manifest removes that failure mode.
+ */
+const ENTRIES = (() => {
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const out = [];
+  for (const [specifier, target] of Object.entries(pkg.exports || {})) {
+    if (specifier === "./package.json" || typeof target === "string") continue;
+    const file = String(target.default || target.import || "").replace(/^\.\/src\//, "").replace(/^\.\//, "");
+    if (!file) continue;
+    const name = specifier === "." ? "gridxcel" : "gridxcel/" + specifier.replace(/^\.\//, "");
+    out.push([name, file]);
+  }
+  return out;
+})();
 
 /**
  * Names that are exported for advanced use but are deliberately not part of the

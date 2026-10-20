@@ -1452,6 +1452,48 @@ What it does **not** promise:
 
 ---
 
+## gridxcel/formats
+
+Text-based spreadsheet formats beyond XLSX and CSV: **SYLK** and **DIF**, the two
+legacy interchange formats Excel still reads and writes.
+
+| Export | Signature | Notes |
+| --- | --- | --- |
+| `sylkToSheet` | `(text, opts?) -> Sheet` | SYLK to a Sheet. An omitted `Y` or `X` reuses the previous coordinate, as real files rely on. |
+| `sheetToSYLK` | `(sheet, opts?) -> string` | Sheet to SYLK. A date is written as its serial: SYLK has no date type. |
+| `difToSheet` | `(text, opts?) -> Sheet` | DIF to a Sheet, per the 1981 specification. |
+| `sheetToDIF` | `(sheet, opts?) -> string` | Sheet to DIF. A date is written as its serial: DIF has no date type. |
+
+`opts.name` sets the sheet name; `opts.eol` sets the line ending (CRLF by
+default, which is what Excel writes).
+
+You rarely need this entry point directly: `gridxcel/compat` sniffs the format
+from the content, so `read(sylkText)` works without saying which format it is.
+Import these when you already know and want to avoid the guess.
+
+```js doc-example
+import { difToSheet, sheetToDIF, sheetToSYLK, sylkToSheet } from "gridxcel/formats";
+import { aoaToSheet } from "gridxcel/json";
+import assert from "node:assert";
+
+const sheet = aoaToSheet([["name", "score"], ["ada", 42]]);
+
+// SYLK: a record-based format, one "C;Y..;X..;K.." per cell.
+const sylk = sheetToSYLK(sheet);
+assert.match(sylk, /^ID;P/);
+assert.deepStrictEqual(sylkToSheet(sylk).rows[1].map((c) => c.v), ["ada", 42]);
+
+// DIF: a header section, then two-line data chunks.
+const dif = sheetToDIF(sheet);
+assert.match(dif, /^TABLE/);
+assert.deepStrictEqual(difToSheet(dif).rows[1].map((c) => c.v), ["ada", 42]);
+
+console.log("sylk bytes:", sylk.length, "| dif bytes:", dif.length);
+```
+
+
+---
+
 ## TypeScript
 
 Hand-written declarations ship for all seven entry points:

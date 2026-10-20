@@ -38,7 +38,11 @@
       "types": "./src/zip.d.ts",
       "default": "./src/zip.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./formats": {
+      "types": "./src/formats.d.ts",
+      "default": "./src/formats.js"
+    }
   },
   "files": [
     "src",

@@ -4,19 +4,21 @@
 
 gridxcel reads XLSX-family packages and delimited text. Nothing else. It will
 not open the file, it will not guess, and there is no plugin to add a format.
-If the file you have is not one of the two below, this is the wrong library and
-no amount of configuration changes that.
+If the file you have is not one of the formats below, this is the wrong library
+and no amount of configuration changes that.
 
 | You have | gridxcel | Use instead |
 | --- | --- | --- |
 | XLSX, XLSM | Yes | - |
 | CSV, TSV, any single-character delimiter | Yes | - |
+| SYLK | Yes, via `gridxcel/formats`, or transparently through the compat sniffer | - |
+| DIF | Yes, via `gridxcel/formats`, or transparently through the compat sniffer | - |
 | XLSB | No | SheetJS |
 | XLS (BIFF) | No | SheetJS |
 | SpreadsheetML 2003 | No | SheetJS |
 | ODS, FODS | No | SheetJS |
 | NUMBERS | No | SheetJS |
-| DBF, SYLK, DIF, PRN | No | SheetJS |
+| DBF, PRN | No | SheetJS |
 | Lotus 1-2-3, Quattro Pro | No | SheetJS |
 | HTML or RTF tables | No | SheetJS, or a parser for that format |
 

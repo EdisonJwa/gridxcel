@@ -49,6 +49,7 @@ import { GridxcelError, NotImplementedError } from "./errors.js";
 import { decodeCell, decodeRange, encodeCell, encodeCol, encodeRange, toRange } from "./address.js";
 import {
   aoaToSheet,
+  blankSheet,
   cellAt,
   cellText,
   jsonToSheet,
@@ -58,6 +59,8 @@ import {
   sheetToJSON,
 } from "./json.js";
 import { csvToSheet, sheetToCSV, toCSV } from "./csv.js";
+import { sheetToSYLK, sylkToSheet } from "./sylk.js";
+import { difToSheet, sheetToDIF } from "./dif.js";
 import {
   emptyBook, freeSheetName, validateSheetName } from "./api.js";
 import { DEFAULT_SHEET_NAME } from "./constants.js";
@@ -197,10 +200,41 @@ function decodeText(bytes) {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
+/**
+ * Sniff which text format this is.
+ *
+ * A SYLK file begins with the `ID` record; a DIF file begins with
+ * `TABLE\n0,1`. CSV has no signature, so it is the fallback - which is also why
+ * guessing is safe here: a CSV whose first cell happens to be "ID" needs the
+ * literal `{ bookType: "csv" }` to say so, and that option exists.
+ *
+ * Sniffing rather than requiring bookType matters for migration: SheetJS picks
+ * the format from the content, and so does every caller who has been handing it
+ * a path ending in .slk.
+ */
+function sniffTextFormat(text, opts) {
+  if (opts.bookType === "csv" || opts.bookType === "txt") return "csv";
+  if (opts.bookType !== undefined && opts.bookType !== null) return String(opts.bookType);
+  const head = text.length > 512 ? text.slice(0, 512) : text;
+  if (/^ID;/.test(head)) return "sylk";
+  if (/^TABLE\r?\n/.test(head)) return "dif";
+  return "csv";
+}
+
 function readTextBook(text, opts) {
   const book = emptyBook();
   if (opts.date1904) book.dateSystem = 1904;
-  book.sheets = [csvToSheet(text, opts)];
+  const format = sniffTextFormat(text, opts);
+  if (format === "sylk") {
+    book.sheets = [sylkToSheet(text, opts)];
+  } else if (format === "dif") {
+    book.sheets = [difToSheet(text, opts)];
+  } else if (format === "csv" || format === "txt") {
+    book.sheets = [csvToSheet(text, opts)];
+  } else {
+    throw new GridxcelError("cannot read " + JSON.stringify(format) + " from text; supported text formats are csv, txt, sylk and dif", "BAD_TYPE", { bookType: format });
+  }
+  book.sheetNames = book.sheets.map((s) => s.name);
   return attachViews(book);
 }
 
@@ -289,6 +323,12 @@ export function write(wb, opts = {}) {
       : opts);
     return shapeText(text, opts);
   }
+  if (type === "sylk") {
+    return shapeText(sheetToSYLK(book.sheets[0] || blankSheet(), opts), opts);
+  }
+  if (type === "dif") {
+    return shapeText(sheetToDIF(book.sheets[0] || blankSheet(), opts), opts);
+  }
   if (type === "json") {
     const sheet = book.sheets[0];
     const rows = sheet ? sheetToJSON(sheet, opts) : [];
@@ -298,7 +338,7 @@ export function write(wb, opts = {}) {
     return shapeBytes(writeWorkbookSync(book, outputOptions(opts)), opts);
   }
   throw new NotImplementedError(
-    "compat.write does not support bookType " + JSON.stringify(type) + " (xlsx, xlsm, csv, txt, json)",
+    "compat.write does not support bookType " + JSON.stringify(type) + " (xlsx, xlsm, csv, txt, json, sylk, dif)",
   );
 }
 

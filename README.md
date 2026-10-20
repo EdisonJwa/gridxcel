@@ -149,7 +149,7 @@ published as a range and not as one number. Reproduce with
 
 Read [docs/LIMITATIONS.md](docs/LIMITATIONS.md) before adopting this. In short:
 
-* **No XLSB, XLS, ODS, NUMBERS, DBF, SYLK, DIF or HTML tables.** XLSX and CSV only.
+* **No XLSB, XLS, ODS, NUMBERS, DBF or HTML tables.** XLSX, CSV, SYLK and DIF only.
 * **No charts, images, pivot tables, macros, conditional formatting or data
   validation.**
 * **No CommonJS.** ESM only - though browser bundling works, see [docs/BROWSER.md](docs/BROWSER.md).
@@ -191,6 +191,7 @@ fifteen formats done adequately.
 | `gridxcel/numfmt` | The ECMA-376 number-format engine |
 | `gridxcel/xml` | The SAX parser and entity codec |
 | `gridxcel/zip` | The ZIP container reader and writer |
+| `gridxcel/formats` | SYLK and DIF reading and writing |
 
 ## Verification
 
