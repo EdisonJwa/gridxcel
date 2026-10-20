@@ -84,17 +84,22 @@ costs **5.9 MiB retained** to read as a stream against **164.9 MiB** for a full
 parse, at 88% of the throughput:
 
 ```js doc-example
-import { eachRow, read } from "gridxcel";
+import { eachRow, read, write } from "gridxcel";
+import assert from "node:assert";
 
-const PATH = "../../bench/fair-50000x8.xlsx";
+// A workbook built in memory, so this example needs no fixture on disk.
+const rowsData = Array.from({ length: 20000 }, (_, r) => [r, "row " + r, r * 1.5]);
+const bytes = await write(rowsData);
 
 // Full parse: the whole workbook is a value you can inspect.
-const book = await read(PATH);
+const book = await read(bytes);
+assert.strictEqual(book.sheets[0].rowCount, 20000);
 console.log("materialised:", book.sheets[0].rowCount, "rows in memory");
 
 // Streaming: one row exists at a time. Works on files larger than the heap.
 let rows = 0;
-for await (const row of eachRow(PATH)) rows++;
+for await (const row of eachRow(bytes)) rows++;
+assert.strictEqual(rows, 20000);
 console.log("streamed:", rows, "rows, one at a time");
 ```
 

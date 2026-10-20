@@ -67,13 +67,14 @@
     "interop": "node scripts/interop.mjs",
     "check:docs": "node scripts/check-docs.mjs",
     "check:exports": "node scripts/check-exports-doc.mjs",
-    "check": "npm run check:docs && npm run check:exports && npm test",
+    "check": "npm run check:docs && npm run check:exports && npm run check:clone && npm test",
     "bench": "node scripts/bench.mjs",
     "bench:scaling": "node --expose-gc scripts/bench-scaling.mjs",
     "golden": "python test/make_golden.py",
     "prepublishOnly": "npm run check",
     "release:dry": "npm publish --dry-run",
-    "release": "npm publish"
+    "release": "npm publish",
+    "check:clone": "node scripts/check-clean-clone.mjs"
   },
   "keywords": [
     "xlsx",
