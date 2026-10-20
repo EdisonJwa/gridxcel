@@ -108,11 +108,11 @@ process, across seven passes:
 | Operation | Median time | Versus SheetJS CE 0.20.3 |
 | --- | --- | --- |
 | SheetJS `read` | 961 ms | - |
-| gridxcel `readSync` | 519 ms | **1.57x - 2.37x faster** |
-| gridxcel `read` | 520 ms | **1.42x - 2.62x faster** |
-| gridxcel `eachRow` | 511 ms | **1.56x - 2.68x faster** |
+| gridxcel `readSync` | 315 ms | **2.99x - 3.32x faster** |
+| gridxcel `read` | 281 ms | **3.40x - 3.75x faster** |
+| gridxcel `eachRow` | 286 ms | **3.31x - 3.79x faster** |
 
-So roughly **1.4x to 2.7x faster, median about 1.9x**. The range is the claim: a
+So roughly **3.0x to 3.8x faster, median about 3.4x**. The range is the claim: a
 single pass on a shared machine can land anywhere inside it, which is why it is
 published as a range and not as one number. Reproduce with
 `npm run bench:scaling`. Method and caveats in

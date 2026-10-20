@@ -1198,16 +1198,26 @@ console.log("sections:", sections.length, "| dt:", formatDateTime(45366.6046875,
 | `parseTag` | `(inner) -> { name, local, attrs }` | Tag body to name and attribute map. |
 | `scanTagEnd` | `(s, from, quote) -> { gt, quote, scanned, done }` | Resumable scan for the `>` that ends a tag. Returns `gt` `-1` when the tag is unfinished, plus the quote state and offset to resume from, so a tag split across chunks is scanned once rather than from the start each time. The worksheet reader uses it; it is exported because a caller writing its own scanner needs the same resumable behaviour to stay linear on a large attribute value. |
 | `localName` | `(name) -> string` | Strips a namespace prefix. |
+| `tagLocalIfNoAttrs` | `(body) -> string \| null` | One-pass local name for a tag with no attributes, or `null` when it has some. A worksheet is mostly `<v>`, `<t>` and `</c>`, and this answers the only question the scanner has for those without allocating a result or an attribute map. Use `parseTag` for the `null` case. |
+| `NO_ATTRS` | `object` | The shared frozen, null-prototype empty attribute map. Handed to callbacks so an attribute-free tag does not allocate one; never mutate it. |
 | `decodeEntities` | `(s) -> string` | Entities and numeric character references. |
 | `decodeOoxmlEscapes` | `(s) -> string` | The `_xHHHH_` escapes Excel uses for control characters. |
 | `encodeXmlText` | `(s) -> string` | Escape a text node. |
 | `encodeXmlAttr` | `(s) -> string` | Escape an attribute value. |
 
 ```js doc-example
-import { XmlParser, parseChunks, parseTag, scanTagEnd, localName, decodeEntities, decodeOoxmlEscapes, encodeXmlText, encodeXmlAttr } from "gridxcel/xml";
+import { XmlParser, parseChunks, parseTag, scanTagEnd, localName, tagLocalIfNoAttrs, NO_ATTRS, decodeEntities, decodeOoxmlEscapes, encodeXmlText, encodeXmlAttr } from "gridxcel/xml";
 import assert from "node:assert";
 
 assert.strictEqual(localName("x:row"), "row");
+
+// tagLocalIfNoAttrs answers the scanner's only question for an attribute-free
+// tag, in one pass and without allocating. null means "has attributes, use parseTag".
+assert.strictEqual(tagLocalIfNoAttrs("v"), "v");
+assert.strictEqual(tagLocalIfNoAttrs("x:c"), "c");
+assert.strictEqual(tagLocalIfNoAttrs('c r="A1"'), null);
+assert.strictEqual(parseTag('c r="A1"').local, "c");
+assert.strictEqual(Object.keys(NO_ATTRS).length, 0, "the shared empty map is empty");
 assert.strictEqual(decodeEntities("a &amp; b"), "a & b");
 assert.strictEqual(decodeOoxmlEscapes("_x000A_"), "\n");
 assert.strictEqual(encodeXmlText("<&>"), "&lt;&amp;&gt;");

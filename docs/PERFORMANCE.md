@@ -120,14 +120,20 @@ passes, and the speedup is reported as the range across those same passes.
 
 | Operation | Median time | Versus SheetJS |
 | --- | --- | --- |
-| SheetJS `read` | 961 ms | - |
-| gridxcel `readSync` | 519 ms | median 1.85x, range 1.57x - 2.37x |
-| gridxcel `read` (async) | 520 ms | median 1.91x, range 1.42x - 2.62x |
-| gridxcel `eachRow` (streaming) | 511 ms | median 1.88x, range 1.56x - 2.68x |
-| SheetJS read + write | 1,427 ms | - |
-| gridxcel `writeWorkbookSync` | 348 ms | write only |
+| SheetJS `read` | 1,072 ms | - |
+| gridxcel `readSync` | 315 ms | median 3.20x, range 2.99x - 3.32x |
+| gridxcel `read` (async) | 281 ms | median 3.50x, range 3.40x - 3.75x |
+| gridxcel `eachRow` (streaming) | 286 ms | median 3.41x, range 3.31x - 3.79x |
+| SheetJS read + write | 1,377 ms | - |
+| gridxcel `writeWorkbookSync` | 357 ms | write only |
 
-**The headline is the range: roughly 1.4x to 2.7x faster, median about 1.9x.**
+**The headline is the range: roughly 3.0x to 3.8x faster, median about 3.4x.**
+
+The earlier figures in this table were 519/520/511 ms and 1.9x, taken before the
+quadratic scanner was fixed and before the tag scanner gained a no-attribute fast
+path. The improvement is real but the machine matters: absolute times here are
+lower than the previous revision of this document for the *same* code, which is
+why the ratio and its range are the numbers to trust, not the milliseconds.
 
 ### A correction, and why the range matters
 

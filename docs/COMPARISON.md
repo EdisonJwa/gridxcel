@@ -135,13 +135,13 @@ passes; the speedup is the range across those same passes.
 | Operation | Median time | Versus SheetJS |
 | --- | --- | --- |
 | SheetJS `read(bytes)` | 961 ms | - |
-| gridxcel `readSync(bytes)` | 519 ms | median 1.85x, range 1.57x - 2.37x |
-| gridxcel `read(bytes)` (async) | 520 ms | median 1.91x, range 1.42x - 2.62x |
-| gridxcel `eachRow(bytes)` (streaming) | 511 ms | median 1.88x, range 1.56x - 2.68x |
+| gridxcel `readSync(bytes)` | 315 ms | median 3.20x, range 2.99x - 3.32x |
+| gridxcel `read(bytes)` (async) | 281 ms | median 3.50x, range 3.40x - 3.75x |
+| gridxcel `eachRow(bytes)` (streaming) | 286 ms | median 3.41x, range 3.31x - 3.79x |
 | SheetJS read + write | 1,427 ms | - |
 | gridxcel `writeWorkbookSync` | 348 ms | write only |
 
-**gridxcel reads roughly 1.4x to 2.7x faster, median about 1.9x.** The range is
+**gridxcel reads roughly 3.0x to 3.8x faster, median about 3.4x.** The range is
 the claim: repeating the identical command produced speedups from 1.42x to 4.66x,
 so a single pass is a sample rather than a result. Streaming costs the same as a
 full parse while holding one row instead of a workbook.

@@ -13,7 +13,7 @@
  * retroactively, so it stays absolute (originCol is effectively 0).
  */
 
-import { decodeEntities, decodeOoxmlEscapes, localName, parseTag, scanTagEnd } from "./xml.js";
+import { NO_ATTRS, decodeEntities, decodeOoxmlEscapes, localName, tagLocalIfNoAttrs, parseTag, scanTagEnd } from "./xml.js";
 import { decodeCell, decodeCol, encodeCol, makeBounds, extendBounds, boundsToRef } from "./address.js";
 import { formatValue, serialToDate, dateToSerial } from "./numfmt.js";
 import { GridxcelError } from "./errors.js";
@@ -274,19 +274,31 @@ class RowScanner {
       this.closeTag(nameOf(raw, 1));
       return;
     }
-    const selfClose = raw.charCodeAt(raw.length - 1) === 47;
-    const tag = parseTag(selfClose ? raw.slice(0, raw.length - 1) : raw);
-    const local = tag.local;
+    const last = raw.length - 1;
+    const selfClose = raw.charCodeAt(last) === 47;
+    const body = selfClose ? raw.slice(0, last) : raw;
+    // 79% of the tags in a real worksheet carry no attributes, and for those the
+    // only thing wanted is the local name. One pass answers both questions: a
+    // null means "has attributes, call parseTag", which is the case that needs
+    // the full walk anyway.
+    //
+    // The two branches must then share the tail: an early return here skipped the
+    // text-capture setup, so <v> and <t> content was never collected and every
+    // sheet came back with zero rows.
+    const quickLocal = tagLocalIfNoAttrs(body);
+    const tag = quickLocal === null ? parseTag(body) : null;
+    const local = quickLocal === null ? tag.local : quickLocal;
+    const attrs = quickLocal === null ? tag.attrs : NO_ATTRS;
     if (selfClose) {
-      this.openTag(local, tag.attrs, true);
+      this.openTag(local, attrs, true);
       return;
     }
-    this.openTag(local, tag.attrs, false);
+    this.openTag(local, attrs, false);
     // Text capture is only ever needed inside a cell; gating on that keeps
     // extension markup (x14:sparklineGroup, xm:f) from hijacking the scanner.
     if (TEXT_ELEMENTS.has(local) && this.cell !== null) {
       this.textEl = local;
-      this.textPreserve = tag.attrs["xml:space"] === "preserve";
+      this.textPreserve = attrs["xml:space"] === "preserve";
     }
   }
 

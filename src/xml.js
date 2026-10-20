@@ -166,7 +166,15 @@ function hasTerminator(chunk, tail, term) {
  * Shared attribute map for tags that have none. Frozen so an accidental write
  * fails loudly instead of corrupting every subsequent no-attribute tag.
  */
-const NO_ATTRS = Object.freeze(Object.create(null));
+/**
+ * The shared empty attribute map.
+ *
+ * Frozen and null-prototype so a consumer cannot accidentally add a key to it or
+ * inherit one from Object.prototype. Exported because the worksheet scanner takes
+ * its own fast path for attribute-free tags and must hand the same object to
+ * openTag, rather than allocating a second empty map per tag.
+ */
+export const NO_ATTRS = Object.freeze(Object.create(null));
 
 /**
  * While the un-consumed construct is this short the parser joins its pieces and
@@ -487,6 +495,37 @@ function decodeAttrValue(s) {
 export function localName(name) {
   const colon = name.indexOf(":");
   return colon < 0 ? name : name.slice(colon + 1);
+}
+
+/**
+ * Local name of an attribute-free tag, in a single pass; null when it has attributes.
+ *
+ * A worksheet is mostly `<v>`, `<t>`, `<is>` and `</c>` - 79% of the tags in a
+ * 50,000-row sheet carry no attributes - and the scanner only needs the name for
+ * those. parseTag handles that case without walking attributes, but it still
+ * allocates the result object for every one of two million tags.
+ *
+ * The caller must be able to fall back cheaply, so this returns null the moment
+ * it sees whitespace, which is the only thing that can introduce an attribute.
+ * That early exit matters: an earlier version asked one predicate whether the
+ * body had whitespace and a second function for the name, which scanned the body
+ * three times per tag and measured slower than not doing this at all.
+ *
+ * Unprefixed names return the input string itself, so the common case allocates
+ * nothing.
+ *
+ * @param {string} body the text between "<" and ">" (no self-closing slash)
+ * @returns {string | null} the local name, or null when the tag has attributes
+ */
+export function tagLocalIfNoAttrs(body) {
+  const n = body.length;
+  let colon = -1;
+  for (let i = 0; i < n; i++) {
+    const c = body.charCodeAt(i);
+    if (c === 32 || c === 9 || c === 10 || c === 13) return null;
+    if (c === 58 && colon < 0) colon = i;
+  }
+  return colon < 0 ? body : body.slice(colon + 1);
 }
 
 /** Drive a parser over an async iterable of string|Uint8Array chunks. */
