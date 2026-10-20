@@ -36,6 +36,10 @@ check("the compiler ran", r.status !== null && !r.error, r.error ? String(r.erro
 check("a consumer compiles against the published types", r.status === 0, output.split("\n").filter(Boolean).slice(0, 5).join(" | "));
 check("with skipLibCheck disabled", !/skipLibCheck/.test(output));
 check("and without @types/node", !/Cannot find name 'Buffer'|Cannot find namespace 'NodeJS'/.test(output));
+  // The published declarations promise not to need the DOM lib or @types/node.
+  // This check is only meaningful because types/tsconfig.json omits "dom" from
+  // lib: while it was present, a declaration could use ReadableStream undetected.
+  check("and without the DOM lib", !/Cannot find name '(ReadableStream|Blob|Response|FormData)'/.test(output));
 
 /* 4. Compiling is not matching. A declaration can be perfectly valid and still
       describe something that is not there, so compare the two directly: every
