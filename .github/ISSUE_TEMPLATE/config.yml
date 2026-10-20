@@ -1,0 +1,6 @@
+# Point vulnerabilities at the private reporting route described in SECURITY.md.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/gridxcel/gridxcel/security/policy
+    about: SECURITY.md explains the private route. Do not open a public issue.
