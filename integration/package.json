@@ -1,0 +1,26 @@
+{
+  "name": "gridxcel-integration",
+  "private": true,
+  "type": "module",
+  "description": "Real-environment integration tests for gridxcel: bundlers, browsers, React, Preact. Never published.",
+  "scripts": {
+    "test": "node run-all.mjs",
+    "bundle": "node browser-bundle.test.mjs",
+    "vite": "node vite.test.mjs",
+    "react": "node react.test.mjs",
+    "types": "tsc --project types/tsconfig.json",
+    "chrome": "node real-browser.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "vite": "^8.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "preact": "^10.24.0",
+    "preact-render-to-string": "^6.5.0",
+    "typescript": "^7.0.2",
+    "puppeteer-core": "^24.0.0",
+    "webpack": "^5.0.0",
+    "webpack-cli": "^5.0.0"
+  }
+}

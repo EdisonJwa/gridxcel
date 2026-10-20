@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>gridxcel in a real browser</title></head>
+<body>
+<script src="./gridxcel.iife.js"></script>
+<script>
+// Everything below runs in the page's own context in a real engine. If the
+// library reaches for Buffer, process, require or a Node builtin, this throws.
+window.__result = (async () => {
+  const gx = window.GridxcelReal;
+  const b64 = document.getElementById("fixture").textContent.trim();
+  const raw = atob(b64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+  const book = await gx.read(bytes);
+  const rows = await gx.sheetToJSON(book.sheets[0], { header: 1 });
+  const csv = await gx.sheetToCSV(book.sheets[0]);
+  let streamed = 0;
+  for await (const r of gx.eachRow(bytes)) if (r.cells.length) streamed++;
+
+  const out = await gx.write([["name", "score"], ["ada", 42]], { bookType: "xlsx" });
+  const back = await gx.read(out);
+
+  // The synchronous API must fail with a typed error, not a ReferenceError.
+  let syncCode = null, syncName = null;
+  try { gx.readSync(bytes); } catch (e) { syncCode = e.code; syncName = e.name; }
+
+  return {
+    sheets: book.sheetNames,
+    firstCell: rows[0] && rows[0][0],
+    csvStart: String(csv).slice(0, 14),
+    streamed,
+    wroteBytes: out.length,
+    wroteIsUint8: out instanceof Uint8Array,
+    rereadSheets: back.sheetNames,
+    syncCode, syncName,
+    // What the engine actually is, so the result cannot be mistaken for Node.
+    ua: navigator.userAgent,
+    hasBuffer: typeof Buffer,
+    hasProcess: typeof process,
+    hasRequire: typeof require,
+    hasDecompressionStream: typeof DecompressionStream,
+  };
+})();
+</script>
+</body></html>
