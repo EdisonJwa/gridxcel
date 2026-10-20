@@ -47,9 +47,16 @@ const CANDIDATES = [
 
 const exe = CANDIDATES.find((p) => { try { return existsSync(p); } catch { return false; } });
 if (!exe) {
-  // Not a failure: a machine without a browser cannot test one. Say so loudly
-  // rather than passing quietly.
+  // Locally, a machine without a browser cannot test one, so skipping is honest.
+  // In CI it is not: the step would report success while having tested nothing,
+  // which is worse than a red build. GRIDXCEL_REQUIRE_BROWSER turns the skip into
+  // a failure, and the workflow sets it.
+  const required = process.env.GRIDXCEL_REQUIRE_BROWSER === "1" || process.env.GRIDXCEL_REQUIRE_BROWSER === "true";
   console.log("  SKIP  no Chrome or Edge found; set CHROME_PATH to run this");
+  if (required) {
+    console.log("\n  FAILED: GRIDXCEL_REQUIRE_BROWSER is set, so a missing browser is an error");
+    process.exit(1);
+  }
   console.log("\n  SKIPPED (not a pass)");
   process.exit(0);
 }

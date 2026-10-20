@@ -44,15 +44,23 @@ jobs:
           cd integration
           npm install --no-audit --no-fund
           node run-all.mjs
-      # The real-browser leg launches an actual Chrome. ubuntu runners ship one,
-      # so it runs there; real-browser.test.mjs exits 0 with a SKIP notice (not a
-      # pass) when no browser is present, so this cannot silently go green.
+      # The real-browser leg launches an actual Chrome. The runner's preinstalled
+      # browser is not at a path we can rely on, so install a known-good one and
+      # let it report where. `--with-deps` pulls the shared libraries headless
+      # Chrome needs, which a bare runner does not always have.
+      - name: Install a browser for the integration leg
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
+        run: npx --yes playwright@1.49.0 install --with-deps chromium
+      # GRIDXCEL_REQUIRE_BROWSER makes a missing browser a FAILURE rather than a
+      # skip: a green step that tested nothing is worse than a red one.
       - name: Integration (real browser)
         if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
         env:
-          CHROME_PATH: /usr/bin/google-chrome
+          GRIDXCEL_REQUIRE_BROWSER: "1"
+          CHROME_PATH: /usr/bin/chromium
         run: |
           cd integration
+          npm install --no-audit --no-fund
           node real-browser.test.mjs
       - name: Examples
         run: node examples/run-all.mjs
