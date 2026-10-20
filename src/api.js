@@ -204,6 +204,11 @@ function takenIncludes(taken, name) {
 export function emptyBook(props) {
   return {
     sheets: [],
+    // Sheet metadata is populated on the sheets:false read path, where the reader
+    // returns the names without parsing a worksheet. It is part of the Book shape
+    // whether or not any sheets were read, so an api-built and a reader-built Book
+    // have the same fields - the reader had this one and api did not.
+    sheetNames: [],
     dateSystem: 1900,
     numFmts: new Map(),
     styles: [],

@@ -68,7 +68,11 @@ test("F4: the dead sync-reader cluster is gone and readSync still works", () => 
 
 test("F8: one empty-Book helper, used by every caller in this change", () => {
   const book = emptyBook();
-  assert.deepEqual(Object.keys(book).sort(), ["dateSystem", "definedNames", "numFmts", "props", "sheets", "styles"]);
+  // sheetNames is part of the shape, not an extra: the reader populates it on the
+  // sheets:false path and index.js reads it, so an api-built Book without it was
+  // the incomplete one (F22).
+  assert.deepEqual(Object.keys(book).sort(), ["dateSystem", "definedNames", "numFmts", "props", "sheetNames", "sheets", "styles"]);
+  assert.deepEqual(book.sheetNames, []);
   assert.equal(book.dateSystem, 1900);
   assert.deepEqual(book.sheets, []);
   assert.deepEqual(book.props, {});

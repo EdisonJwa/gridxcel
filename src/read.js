@@ -23,6 +23,7 @@ import { fileUrlToPath, readFileNode, readFileNodeSync } from "./platform.js";
 import { XmlParser, localName } from "./xml.js";
 import { BUILTIN_FORMATS } from "./numfmt.js";
 import { toRange } from "./address.js";
+import { emptyBook } from "./api.js";
 import { getPart, parseRels, prewarmMeta, readWorkbookMeta, resolveTarget, relsPathOf } from "./opc.js";
 import {
   createRowStream, parseSharedStrings, parseSharedStringsSync, parseSheetXml, parseSheetXmlSync,
@@ -475,18 +476,6 @@ function selectSheets(declared, wanted, sink) {
 }
 
 /* ------------------------------------------------------------------ assembly */
-
-function emptyBook() {
-  return {
-    sheets: [],
-    sheetNames: [],
-    dateSystem: 1900,
-    numFmts: new Map(),
-    styles: [],
-    props: {},
-    definedNames: [],
-  };
-}
 
 function readerOptionsFor(metaSheet, opts, shared, styles, zip, sink, date1904) {
   const sheetPath = metaSheet.path;

@@ -56,6 +56,7 @@ import {
   normalizeSheet,
   resolveRange,
 } from "./json.js";
+import { emptyBook } from "./api.js";
 
 const NUM_RE = /^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/;
 const BOOL_RE = /^(?:true|false)$/i;
@@ -531,12 +532,10 @@ export function toCSV(book, opts = {}) {
 
 /** CSV text -> Book holding one sheet, ready for writeWorkbook. */
 export function fromCSV(text, opts = {}) {
-  return {
-    sheets: [csvToSheet(text, opts)],
-    dateSystem: opts.date1904 ? 1904 : 1900,
-    numFmts: new Map(),
-    styles: [],
-    props: {},
-    definedNames: [],
-  };
+  // The canonical shape, not a copy of it: a Book literal written out here is
+  // how the reader and api versions drifted apart in the first place (F8/F22).
+  const book = emptyBook();
+  book.sheets = [csvToSheet(text, opts)];
+  if (opts.date1904) book.dateSystem = 1904;
+  return book;
 }
