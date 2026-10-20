@@ -116,7 +116,7 @@ These work. Something specific about them is not proven.
 | Fuzzing | 456 corrupted inputs prove no plain `Error`, no hang and damage reported: 402 typed errors, 54 recovered. They do not prove that a damaged file yields the correct subset of rows - only intact files are checked for content. |
 | Browser support | The bundle is executed in a sandbox with the Web platform and no `Buffer`, `process`, `require` or module loader, and the same code path is checked against the Node backend. It has not been run in Chrome, Firefox or Safari, so the `deflate-raw` support floor and any engine-specific stream behaviour are untested here. |
 
-The evidence for the rows above: `npm test` runs 225 tests (221 pass, 4
+The evidence for the rows above: `npm test` runs 262 tests (258 pass, 4
 skipped); `node scripts/interop.mjs` reports 190 write checks and 37,293 read
 checks against openpyxl, 0 mismatches; `node scripts/check-crc.mjs` confirms a
 corrupted part is rejected with `CRC_MISMATCH`.
@@ -152,10 +152,10 @@ corrupted part is rejected with `CRC_MISMATCH`.
   254,382 bytes gzipped, but its mini build is 86,664 bytes gzipped - within
   about 2% of gridxcel. If size is your reason for choosing, that is not a
   reason.
-* **Speed is a range, not a headline.** Read throughput is 1.4x to 2.7x
-  SheetJS CE 0.20.3 on the same bytes in the same process, measured as a median
-  each the median of three. The median is about 1.9x and a single pass can read as
-  low as 1.42x; quote the range, never one run.
+* **Speed is a range, not a headline.** Read throughput is 3.0x to 3.8x faster
+  than SheetJS CE 0.20.3 on the same bytes in the same process, across nine
+  passes each the median of three. The median is about 3.4x; quote the range,
+  never one run.
 
 ## Assumptions worth stating
 
@@ -192,7 +192,7 @@ corrupted part is rejected with `CRC_MISMATCH`.
 ## Fixed during the 0.1.0 build
 
 Recorded because the failure modes are instructive, not to pad a changelog.
-Struck-through items remain visible in [test/README.md](https://github.com/gridxcel/gridxcel/blob/main/test/README.md).
+Struck-through items remain visible in [test/README.md](https://github.com/EdisonJwa/gridxcel/blob/main/test/README.md).
 
 * **Corrupt content was returned silently.** Stored parts were never
   CRC-checked. Every part is now verified on read, and corruption raises

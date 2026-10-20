@@ -1,7 +1,7 @@
 {
   "name": "gridxcel",
   "version": "0.1.0",
-  "description": "Zero-dependency, streaming-first XLSX and CSV reader and writer for Node.js. Bounded memory, typed errors, an independent openpyxl oracle, and a SheetJS-compatible migration path.",
+  "description": "Streaming XLSX, CSV, SYLK and DIF for Node.js and the browser. Zero dependencies, bounded memory, ~3.4x faster than SheetJS, typed errors.",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -38,11 +38,11 @@
       "types": "./src/zip.d.ts",
       "default": "./src/zip.js"
     },
-    "./package.json": "./package.json",
     "./formats": {
       "types": "./src/formats.d.ts",
       "default": "./src/formats.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "src",
@@ -91,25 +91,36 @@
     "reader",
     "writer",
     "sheetjs",
-    "sheetjs-alternative",
     "xlsx-alternative",
     "zero-dependency",
     "esm",
     "typescript",
     "number-format",
     "ssf",
-    "zip"
+    "zip",
+    "sylk",
+    "dif",
+    "exceljs-alternative",
+    "sheetjs-alternative",
+    "no-dependencies",
+    "types",
+    "browser",
+    "deno",
+    "bun",
+    "workers",
+    "bounded-memory",
+    "large-files"
   ],
   "dependencies": {},
   "devDependencies": {},
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gridxcel/gridxcel.git",
+    "url": "git+https://github.com/EdisonJwa/gridxcel.git",
     "directory": "."
   },
-  "homepage": "https://github.com/gridxcel/gridxcel#readme",
+  "homepage": "https://github.com/EdisonJwa/gridxcel#readme",
   "bugs": {
-    "url": "https://github.com/gridxcel/gridxcel/issues"
+    "url": "https://github.com/EdisonJwa/gridxcel/issues"
   },
   "author": "gridxcel contributors",
   "sideEffects": false,

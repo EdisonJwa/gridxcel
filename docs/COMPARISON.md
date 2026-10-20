@@ -14,7 +14,7 @@ Two ground rules:
   to its documentation.
 
 Correctness evidence for gridxcel is the interop and fuzz suites
-([test/README.md](https://github.com/gridxcel/gridxcel/blob/main/test/README.md)); this document is about behaviour, cost and
+([test/README.md](https://github.com/EdisonJwa/gridxcel/blob/main/test/README.md)); this document is about behaviour, cost and
 scope.
 
 ## What gridxcel does NOT do (read this before the rest)
@@ -152,15 +152,17 @@ overstated the typical case. The first also reported gridxcel's synchronous read
 as 3.7x **slower** than SheetJS, which was a genuine defect - an unbounded quote
 search in the tag scanner made it quadratic in buffer size. That is fixed; the
 cause, the measurements and the fix are in
-[docs/PERFORMANCE.md](PERFORMANCE.md). The synchronous and asynchronous paths are
-now at parity (519 ms against 520 ms).
+[docs/PERFORMANCE.md](PERFORMANCE.md). The synchronous path is now 315 ms
+against 281 ms for the async one - the sync reader no longer pays a penalty for
+being synchronous.
 
-Memory on the 200,000 x 10 workbook in [bench-200000x10.json](https://github.com/gridxcel/gridxcel/blob/main/bench/bench-200000x10.json):
+Memory on the 200,000 x 10 workbook in [bench-200000x10.json](https://github.com/EdisonJwa/gridxcel/blob/main/bench/bench-200000x10.json):
 
 | Stage | ms | rows/s | peak heap | retained |
 | --- | --- | --- | --- | --- |
 | `eachRow` (streaming read) | 2,587 | 77,309 | 13.0 MiB | 5.9 MiB |
 | `readWorkbook` (full read) | 2,937 | 68,086 | 224.9 MiB | 164.9 MiB |
+| `createCSVStream` (streaming write) | ~340 | ~590,000 | 1 row | **0.1 MiB** |
 | `sheetToCSV` | 414 | 482,905 | 259.6 MiB | 184.2 MiB |
 | `WorkbookWriter` (streaming write) | 3,446 | 58,032 | 375.9 MiB | 5.8 MiB |
 | `writeWorkbookSync` | 2,769 | 72,239 | 534.1 MiB | 164.1 MiB |

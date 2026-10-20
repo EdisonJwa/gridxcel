@@ -17,7 +17,7 @@ still change.
 ## Reporting a vulnerability
 
 Report privately through GitHub's advisory form on the repository:
-https://github.com/gridxcel/gridxcel/security/advisories/new
+https://github.com/EdisonJwa/gridxcel/security/advisories/new
 
 Please do not open a public issue, and do not ask in a public issue whether
 something is a vulnerability. If the advisory form is unavailable to you, open

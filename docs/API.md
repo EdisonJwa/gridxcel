@@ -6,7 +6,7 @@ gridxcel is an ESM-only, zero-dependency XLSX/CSV reader and writer for Node
 (>= 18) and the browser. There is no build step: `src/*.js` is what ships. `require()` is not
 supported - every entry point is an ES module.
 
-This page documents all 117 public symbols exported by the seven entry points
+This page documents all 124 public symbols exported by the eight entry points
 declared in the package export map. Every fence marked **doc-example** is executed as a
 real ES module by `npm run check:docs`; if an example here stops working, the
 check fails. Fixture paths in examples are relative to the repository root
@@ -64,18 +64,19 @@ and throw `PlatformError` `[NOT_SUPPORTED]`. See [BROWSER.md](./BROWSER.md).
 
 | Specifier | File | Named exports | Purpose |
 | --- | --- | --- | --- |
-| `gridxcel` | `src/index.js` | 68 (+ default object) | The whole library, re-exported. |
+| `gridxcel` | `src/index.js` | 69 (+ default object) | The whole library, re-exported. |
 | `gridxcel/compat` | `src/compat.js` | 16 (+ default object) | SheetJS-shaped surface; see [MIGRATION.md](./MIGRATION.md). |
-| `gridxcel/csv` | `src/csv.js` | 7 | CSV/DSV parse and serialise. |
+| `gridxcel/csv` | `src/csv.js` | 8 | CSV/DSV parse and serialise, including the streaming writer. |
 | `gridxcel/json` | `src/json.js` | 19 | Sheet/JSON/AOA conversion and cell helpers. |
 | `gridxcel/numfmt` | `src/numfmt.js` | 13 | ECMA-376 number formats and date serials. |
-| `gridxcel/xml` | `src/xml.js` | 9 | Incremental SAX parser and XML escaping. |
+| `gridxcel/xml` | `src/xml.js` | 11 | Incremental SAX parser and XML escaping. |
 | `gridxcel/zip` | `src/zip.js` | 13 | ZIP container reader/writer, store and deflate. |
+| `gridxcel/formats` | `src/formats.js` | 4 | SYLK and DIF reading and writing. |
 | `gridxcel/package.json` | `package.json` | - | Package metadata. |
 
-68 + 16 + 7 + 19 + 9 + 13 + 13 = 145 export slots. 117 of those names are
-distinct; the remainder are exported by more than one entry point (for example
-`read`, `write` and `utils` appear in both `gridxcel` and
+69 + 16 + 8 + 19 + 13 + 11 + 13 + 4 = **153 export slots**. **124** of those
+names are distinct; the remainder are exported by more than one entry point (for
+example `read`, `write` and `utils` appear in both `gridxcel` and
 `gridxcel/compat`). Import from a subpath to keep a bundle small; every
 subpath is standalone.
 
@@ -98,11 +99,13 @@ things:
 
 | Count | Meaning |
 | --- | --- |
-| **117** | Distinct public symbols across all seven entry points. This is the size of the API. |
-| **145** | Export slots: the same symbol exported from two entry points counts twice. |
-| **69** | Exports from the root `gridxcel` entry point alone, including its default export. |
+| **124** | Distinct public symbols across all eight entry points. This is the size of the API. |
+| **153** | Export slots: the same symbol exported from two entry points counts twice. |
+| **69** | Exports from the root `gridxcel` entry point alone, excluding its default export. |
 
-When a document says "the API is 117 symbols", that is the first row.
+When a document says "the API is 124 symbols", that is the first row. Both
+numbers are checked by `npm run check:exports`, which derives the entry points
+from `package.json` rather than from a hand-written list.
 
 ## Data model
 
@@ -1424,9 +1427,12 @@ What the library promises at 0.1.0:
   package `browser` field, and the Web compression streams supply `deflate-raw`.
   The synchronous API and the filesystem helpers are Node-only and fail with a
   typed error. See [BROWSER.md](./BROWSER.md).
-* **Speed.** On the published 50,000 x 8 fixture the range across repeated runs
-  is 1.4x to 2.7x faster than SheetJS CE 0.20.3 for read, async read and
+* **Speed.** On the published 50,000 x 8 fixture the range across nine repeated
+  runs is 3.0x to 3.8x faster than SheetJS CE 0.20.3 for read, async read and
   streaming read; see [PERFORMANCE.md](./PERFORMANCE.md) for method and numbers.
+* **Bounded CSV output.** `createCSVStream` yields CSV a row at a time, so a
+  200,000 x 10 sheet retains about 0.1 MB instead of the 14.3 MB the complete
+  string costs.
 
 What it does **not** promise:
 
@@ -1496,7 +1502,7 @@ console.log("sylk bytes:", sylk.length, "| dif bytes:", dif.length);
 
 ## TypeScript
 
-Hand-written declarations ship for all seven entry points:
+Hand-written declarations ship for all eight entry points:
 `src/index.d.ts`, `compat.d.ts`, `csv.d.ts`, `json.d.ts`, `numfmt.d.ts`,
 `xml.d.ts` and `zip.d.ts`, plus the shared contracts in `src/types.d.ts`.
 

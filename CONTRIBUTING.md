@@ -23,7 +23,7 @@ Clone the repository and open it. That is the whole setup:
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | The `node:test` suite: unit, integration, interop and robustness. As last measured, 137 tests, 133 pass, 0 fail, 4 skipped; the skips are fixtures the Python oracle refuses to open. |
+| `npm test` | The `node:test` suite: unit, integration, interop and robustness. As last measured, 262 tests, 258 pass, 0 fail, 4 skipped; the skips are fixtures the Python oracle refuses to open. |
 | `npm run check:docs` | Documentation checker: every backticked symbol must exist in `src/`, every local link and anchor must resolve, and every `doc-example` fence is executed. |
 | `npm run interop` | The oracle harness: gridxcel writes and Python openpyxl verifies, then gridxcel reads Python-written fixtures and diffs them. Exit 0 pass, 1 mismatch, 2 nothing proven. |
 | `npm run bench:scaling` | The scaling and head-to-head numbers behind [docs/PERFORMANCE.md](docs/PERFORMANCE.md). |

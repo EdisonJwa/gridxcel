@@ -169,7 +169,7 @@ fifteen formats done adequately.
 | Document | What it covers |
 | --- | --- |
 | [QUICKSTART.md](docs/QUICKSTART.md) | Install to working code, assuming no XLSX knowledge |
-| [API.md](docs/API.md) | Complete reference for all seven entry points |
+| [API.md](docs/API.md) | Complete reference for all eight entry points |
 | [COOKBOOK.md](docs/COOKBOOK.md) | Task-shaped recipes: stream a huge file, CSV to XLSX, and more |
 | [MIGRATION.md](docs/MIGRATION.md) | Moving from SheetJS, including the `gridxcel/compat` shim |
 | [LIMITATIONS.md](docs/LIMITATIONS.md) | Unsupported formats and features, and the 0.1.0 caveats |

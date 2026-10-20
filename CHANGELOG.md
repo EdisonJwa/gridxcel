@@ -9,6 +9,28 @@ All notable changes to gridxcel are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **`createCSVStream`, a streaming CSV writer.** `sheetToCSV` is O(output) in
+  retained memory - it builds every line and joins them - which on a 200,000 x 10
+  sheet costs 14.3 MB for the string. The stream yields the same bytes a row at a
+  time, retains about 0.1 MB, and is roughly 20% faster because it never allocates
+  the line array. Chunks break on row boundaries rather than byte boundaries: a
+  quoted field may legally contain a newline, and splitting there would force a
+  consumer to reassemble before parsing. Both forms walk one shared generator, so
+  they cannot drift. Verified byte-identical across eleven option sets and six
+  chunk sizes; covered by [test/csv-stream.test.mjs](test/csv-stream.test.mjs).
+- **`gridxcel/formats`: SYLK and DIF reading and writing.** Both are legacy text
+  formats that systems predating XLSX still export, and both are implemented
+  against their specifications rather than against this library's own writer - the
+  tests use each specification's worked example. SYLK keeps a cell's type
+  (number, string, TRUE/FALSE, NA) and its rule that an omitted `Y` or `X` reuses
+  the previous coordinate. DIF follows the 1981 grammar: three-line header chunks,
+  two-line data chunks, with a numeric value in the type pair rather than on the
+  keyword line. Also reachable transparently: `gridxcel/compat` sniffs the format
+  from the content, recognising SYLK by its `ID` record and DIF by `TABLE`. An
+  explicit `bookType` overrides the sniff, which matters for a CSV whose first
+  cell is literally "ID". Neither format has a date type, so a date is written as
+  its serial and reads back as a number. Covered by
+  [test/formats.test.mjs](test/formats.test.mjs).
 - **Browser support, with no build step and no polyfill.** The byte-level API -
   `read`, `eachRow`, `sheetToJSON`, `sheetToCSV`, `write`, `WorkbookWriter` -
   runs anywhere with the Web platform. Compression is `node:zlib` on Node and
@@ -40,11 +62,11 @@ All notable changes to gridxcel are recorded here. The format follows
 
 - Read and write of XLSX workbooks, asynchronous and synchronous, from bytes, a
   path, a URL, a `ReadableStream` or an async iterable.
-- Seven entry points with hand-written declarations: `gridxcel` (68 named
+- Eight entry points with hand-written declarations: `gridxcel` (69 named
   exports plus a default object), `gridxcel/compat` (16 plus a default),
-  `gridxcel/csv` (7), `gridxcel/json` (19), `gridxcel/xml` (9),
-  `gridxcel/numfmt` (13) and `gridxcel/zip` (13) - 145 export slots and
-  117 distinct public symbols in total.
+  `gridxcel/csv` (8), `gridxcel/json` (19), `gridxcel/xml` (11),
+  `gridxcel/numfmt` (13), `gridxcel/zip` (13) and `gridxcel/formats` (4) -
+  153 export slots and 124 distinct public symbols in total.
 - Streaming read through `eachRow`, which holds one row at a time, and streaming
   write through `WorkbookWriter` and `SheetWriter`.
 - ZIP container support: stored and deflated parts, Zip64, and CRC-32
@@ -56,7 +78,31 @@ All notable changes to gridxcel are recorded here. The format follows
 
 ### Fixed
 
-
+- **`import.meta.dirname` broke every read on Node 18.** The integration suite
+  used it, but it landed in Node 20.11 and the package declares `engines >= 18`,
+  so on 18 the fixture path became "undefined/fixtures/golden.xlsx" and every read
+  threw `ENOENT`. Now derived from `import.meta.url`.
+- **A test asserted a capability instead of detecting it.**
+  `test/platform.test.mjs` claimed `hasWebDeflate() === true`. Node 18 has
+  `CompressionStream`/`DecompressionStream` but rejects `deflate-raw`, which
+  arrived in Node 20 - so the feature detection was correct and the test was
+  wrong. It now asserts that the answer matches the host, and skips the round trip
+  with a diagnostic when the host cannot support it.
+- **The integration harness could not run on a fresh clone.** Its suites import
+  the published specifier "gridxcel" deliberately - it is what a consumer writes,
+  so it checks the exports map, the types and the `browser` field - which resolved
+  through a self-link that existed only on the development machine. On a clone
+  seven suites failed with "Cannot find package 'gridxcel'". `integration/link-self.mjs`
+  creates the link idempotently and `run-all.mjs` calls it first; verified by
+  hiding the parent node_modules directory entirely.
+- **The browser CI leg could pass while testing nothing.** The suite exited 0 with
+  a SKIP when no browser was present, and the leg did not install one.
+  GRIDXCEL_REQUIRE_BROWSER now makes absence a failure in CI, and the leg
+  installs Chromium.
+- **The exports checker could not see a new entry point.** It used a hand-written
+  table of specifiers, so adding `gridxcel/formats` to the package did not add it
+  to the check and its four exports were never verified as documented. The table
+  is now derived from `package.json`.
 - **`XmlParser` scaled quadratically, and this one was reachable.** An incomplete
   tag, comment, CDATA section or processing instruction was rescanned from its
   own start on every chunk. 8 MB through 16 KB chunks: a long tag cost 5,273 ms
@@ -110,9 +156,27 @@ All notable changes to gridxcel are recorded here. The format follows
 ### Changed
 
 - The synchronous reader is no longer the slow path. `readWorkbookSync` reads
-  `bench/fair-50000x8.xlsx` in 310 ms against 3,558 ms before the scanner fix,
-  within about 5% of the asynchronous path. Measurements and reproduction
-  commands are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+  `bench/fair-50000x8.xlsx` in 315 ms against 3,558 ms before the scanner fix,
+  and the asynchronous `read` in 281 ms. Measurements and reproduction commands
+  are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+- **A fast path for attribute-free tags in the worksheet scanner.** 79% of the
+  2.1 million tags in a 50,000-row sheet carry no attributes and the scanner only
+  wants their local name, but `parseTag` allocated a result object for every one.
+  `tagLocalIfNoAttrs` answers both questions in one pass and returns `null` when
+  the full parser is needed; an unprefixed name returns the input string, so the
+  common case allocates nothing. Measured at -16.4% on tag parsing in isolation,
+  which is a few percent end to end because the tag layer is about a quarter of
+  the parse. Verified against 2,116,398 real tags with zero disagreements.
+- **The published speed figures were corrected, in every document.** README,
+  `PERFORMANCE.md` and `COMPARISON.md` all still claimed 519 ms and "1.4x to 2.7x,
+  median 1.9x" - figures from *before* the quadratic scanner was fixed. The
+  measured result is 315 ms and 3.0x to 3.8x, median about 3.4x. The library was
+  understating itself by nearly half in every document a prospective user reads.
+- **The README was rewritten for a reader who has not chosen a library yet.** It
+  opened by comparing itself to SheetJS and listing what it cannot do, which
+  answers a question a new visitor has not asked. It now leads with bounded
+  memory, measured speed and typed failure, then a capability table, then an
+  honest comparison that says plainly when to use SheetJS instead.
 
 
 - **FS-1** (high): a worksheet declaring a row far beyond its data caused

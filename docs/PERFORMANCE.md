@@ -94,7 +94,7 @@ no quote preceded it, which is exactly what the quote-aware walk returns - and
 The curve is flat now, which is the property worth protecting. End to end on the
 same file, the fix removed the gap between the two readers entirely:
 
-| Path | Before the fix | After the fix |
+| Path | Before the fix | After the fix (at that time) |
 | --- | --- | --- |
 | `readWorkbookSync` | 3,558 ms | 519 ms |
 | `readWorkbook` (async) | 540 ms | 520 ms |

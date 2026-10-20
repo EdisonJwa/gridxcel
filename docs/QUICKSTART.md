@@ -282,5 +282,5 @@ range.
 | [LIMITATIONS.md](./LIMITATIONS.md) | What is not supported, what is unverified, and the 0.1.0 caveats. |
 | [MIGRATION.md](./MIGRATION.md) | Moving from SheetJS, including differences that change results. |
 
-The [examples](https://github.com/gridxcel/gridxcel/tree/main/examples) directory holds nine runnable programs,
+The [examples](https://github.com/EdisonJwa/gridxcel/tree/main/examples) directory holds eleven runnable programs,
 and `node examples/run-all.mjs` runs every one of them.

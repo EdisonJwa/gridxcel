@@ -311,23 +311,23 @@ mechanical check.
 
 | Check | Command | What it proves |
 | --- | --- | --- |
-| Unit and integration tests | `npm test` | 137 tests: 133 pass, 4 skipped, 0 fail. |
+| Unit and integration tests | `npm test` | 262 tests: 258 pass, 4 skipped, 0 fail. |
 | Documentation | `npm run check:docs` | Every documented symbol exists in `src/`, every doc example runs as a real ES module, every link resolves. |
-| Inverse coverage | `node scripts/check-exports-doc.mjs` | Every public export across the seven entry points is named in the documentation. |
+| Inverse coverage | `node scripts/check-exports-doc.mjs` | Every public export across the eight entry points is named in the documentation. |
 | Oracle interop | `node scripts/interop.mjs` | `status=pass`, 190 write checks, 37,293 read checks, 0 mismatches, `dateConvention=local`, against Python openpyxl 3.1.5 and XlsxWriter 3.2.9. |
 | CRC corruption | `node scripts/check-crc.mjs` | A corrupted archive is rejected with `CRC_MISMATCH`. |
 | Fuzzing | `node --test test/fuzz.test.mjs` | 456 cases: 402 typed errors, 0 plain errors, 54 recovered, 0 hangs. |
 | Scaling | `node --test test/scaling.test.mjs` | Parse time is flat across feed sizes, so no scan is quadratic. |
 
 The oracles are independent implementations; no gridxcel module is ever used to
-check another gridxcel module. Test modules: 21. Fixtures: 16.
+check another gridxcel module. Test modules: 25. Fixtures: 16.
 
 Performance, as last measured on `bench/fair-50000x8.xlsx` (50,000 rows x 8
 columns, written by openpyxl so neither library produced it; same bytes, same
-process, seven passes each the median of three): SheetJS CE 0.20.3 reads it in
-961 ms; `readSync` in 519 ms, the async `read` in 520 ms and `eachRow` in
-511 ms. That is a median speedup of about 1.9x, and the range across passes is
-1.42x to 2.62x - quote the range, not the best single number, because one pass is
+process, nine passes each the median of three): SheetJS CE 0.20.3 reads it in
+1,072 ms; `readSync` in 315 ms, the async `read` in 281 ms and `eachRow` in
+286 ms. That is a median speedup of about 3.4x, and the range across passes is
+3.0x to 3.8x - quote the range, not the best single number, because one pass is
 a sample rather than a result.
 
 ---
