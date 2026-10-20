@@ -78,6 +78,33 @@ All notable changes to gridxcel are recorded here. The format follows
 
 ### Fixed
 
+- **A lone surrogate was silently replaced with U+FFFD.** A JavaScript string can
+  hold half of a UTF-16 pair; it has no UTF-8 encoding, and `TextEncoder`
+  substitutes the replacement character without complaint - so `"a\\ud800b"` was
+  written and read back as `"a\\ufffdb"`, a one-way door with no error at any point.
+  Both XML encoders now escape a lone surrogate with the OOXML `_xHHHH_` escape,
+  which already existed for control characters and has the right semantics for a
+  code unit that stands alone. A well-formed pair is left intact.
+- **`<sz val="NaN"/>` was written for a non-finite font size.** A `font.sz` of NaN
+  or Infinity went straight into an attribute, producing a package Excel has to
+  repair. Sizes are now validated as finite and within 1-409 points (`BAD_STYLE`).
+- **A freeze pane outside the grid emitted a cell reference past the sheet.**
+  `freeze: { row: 1e9 }` produced `topLeftCell="CFDGSXM1000000001"`. Now
+  `RANGE_TOO_LARGE`.
+- **An invalid autofilter was written through verbatim.** `autoFilter: "not a range"`
+  emitted `<autoFilter ref="not a range"/>`, which is not valid XML. The ref is now
+  validated and normalised, or `BAD_RANGE`.
+- **A column width that was not a finite positive number was silently dropped.**
+  `width: NaN`, `Infinity` or a negative number left the caller with a default
+  column and no signal. Now `BAD_VALUE`; an over-wide one is clamped to Excel's 255.
+- **Column options with no index were silently dropped, including the documented
+  form.** `{ columns: [{ width: 8 }, { width: 24 }] }` - which COOKBOOK tells the
+  reader to write - set neither width, because an entry with no `min`/`index` fell
+  through the index check. Entry *i* is now column *i*, as the docs always said.
+- **A malformed `<mergeCell ref>` was passed through verbatim.** `"NOTAREF"` reached
+  `sheet.merges`, where a consumer would hand it to a range library and fail far
+  from the file that caused it. Now dropped with a `BAD_MERGE` warning - the
+  reader tolerates a bad file where the writer refuses to produce one.
 - **`import.meta.dirname` broke every read on Node 18.** The integration suite
   used it, but it landed in Node 20.11 and the package declares `engines >= 18`,
   so on 18 the fixture path became "undefined/fixtures/golden.xlsx" and every read

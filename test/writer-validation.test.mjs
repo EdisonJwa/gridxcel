@@ -31,6 +31,16 @@ function write(extra, bookExtra = {}) {
   return writeWorkbookSync({ sheetNames: [sheet.name], sheets: [sheet], ...bookExtra });
 }
 
+/** A one-cell sheet carrying a style, for the style-registry tests. */
+function writeSheetWithStyle(style) {
+  const sheet = sheetWith({ rows: [[{ t: "number", v: 1, s: style }]] });
+  return writeWorkbookSync({ sheetNames: ["S"], sheets: [sheet] });
+}
+
+function stylesXml(bytes) {
+  return new ZipArchive(bytes).readText("xl/styles.xml");
+}
+
 function sheetXml(bytes) {
   return new ZipArchive(bytes).readText("xl/worksheets/sheet1.xml");
 }
@@ -203,5 +213,51 @@ test("reader: hostile metadata never aborts and never leaves the grid", async ()
     const sheet = book.sheets[0];
     assert.ok(sheet.rowCount >= 0 && sheet.rowCount < 2 ** 21, label + ": rowCount " + sheet.rowCount);
     assert.ok(sheet.columnCount >= 0 && sheet.columnCount < 2 ** 20, label + ": columnCount " + sheet.columnCount);
+  }
+});
+
+/* ------------------------------------------------------------- styles */
+
+test("writer: a font size that is not a finite number is refused", () => {
+  // <sz val="NaN"/> is not valid XML, and Excel has to repair the file to open
+  // it - so the failure belonged here, not on the reader's machine.
+  for (const sz of [NaN, Infinity, -Infinity, -5, 0, 1e9]) {
+    assert.throws(
+      () => writeSheetWithStyle({ font: { sz } }),
+      (e) => e.code === "BAD_STYLE" && /font size/.test(e.message),
+      "sz " + String(sz) + " must be refused",
+    );
+  }
+});
+
+test("writer: a usable font size is written exactly", () => {
+  for (const sz of [1, 8, 11, 20, 409]) {
+    const xml = stylesXml(writeSheetWithStyle({ font: { sz } }));
+    assert.ok(xml.includes('<sz val="' + sz + '"/>'), "sz " + sz + " should appear in styles.xml");
+  }
+});
+
+test("writer: no attribute in the package is ever NaN or Infinity", () => {
+  // The general form of the bug: a number reaching an attribute without a
+  // finiteness check produces a file that cannot be parsed.
+  const sheet = sheetWith({
+    columns: [{ min: 0, max: 0, width: 12 }],
+    freeze: { row: 1, col: 1 },
+    autoFilter: "A1:B10",
+  });
+  const bytes = writeWorkbookSync({ sheetNames: ["S"], sheets: [sheet] });
+  const zip = new ZipArchive(bytes);
+  for (const entry of zip.entries) {
+    if (!/\.(xml|rels)$/.test(entry.name)) continue;
+    const text = entry.text();
+    assert.ok(!/="NaN"/.test(text), entry.name + " contains a NaN attribute");
+    assert.ok(!/="Infinity"/.test(text), entry.name + " contains an Infinity attribute");
+    assert.ok(!/="undefined"/.test(text), entry.name + " contains an undefined attribute");
+  }
+});
+
+test("writer: a bad colour is still refused", () => {
+  for (const color of ["not-a-color", "#AB", "#AABBCCDDEEFF"]) {
+    assert.throws(() => writeSheetWithStyle({ font: { color } }), (e) => e.code === "BAD_STYLE", JSON.stringify(color));
   }
 });

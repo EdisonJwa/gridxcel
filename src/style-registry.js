@@ -82,7 +82,7 @@ function normalizeFont(f) {
 // A partial font record would otherwise inherit the viewer default; fill
 // the app default in so every generated file renders identically.
 name: f.name === void 0 ? DEFAULT_FONT_NAME : String(f.name),
-sz: f.sz === void 0 ? DEFAULT_FONT_SIZE : Number(f.sz),
+    sz: normalizeFontSize(f.sz),
 b: f.b === true,
 i: f.i === true,
 u: f.u === true,
@@ -90,6 +90,28 @@ strike: f.strike === true,
 vertAlign: f.vertAlign && f.vertAlign !== "baseline" ? f.vertAlign : void 0,
 color: normalizeColor(f.color)
   };
+}
+
+/**
+ * A font size in points: 1 to 409, and finite.
+ *
+ * @param {unknown} value the caller's `font.sz`
+ * @returns {number}
+ */
+function normalizeFontSize(value) {
+  if (value === undefined || value === null) return DEFAULT_FONT_SIZE;
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw new GridxcelError(
+      "font size " + String(value) + " is not a finite number; a size must be between 1 and 409 points",
+      "BAD_STYLE", { sz: value });
+  }
+  if (n < 1 || n > 409) {
+    throw new GridxcelError(
+      "font size " + n + " is outside the supported range of 1 to 409 points",
+      "BAD_STYLE", { sz: value });
+  }
+  return n;
 }
 
 function fontKey(f) {
