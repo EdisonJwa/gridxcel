@@ -1,0 +1,14 @@
+# Normalise line endings in the repository, whatever the platform.
+# Core.autocrlf is a machine-local setting; this file makes the choice part of
+# the project, so a Windows checkout and a Linux CI runner see the same bytes.
+* text=auto eol=lf
+
+# Files that must stay byte-exact: test fixtures are compared against an oracle
+# and the .xlsx files are real zip archives.
+*.xlsx binary
+*.tgz binary
+*.png binary
+
+# Shell scripts and the Python helpers the oracle runs.
+*.sh text eol=lf
+*.py text eol=lf

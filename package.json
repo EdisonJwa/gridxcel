@@ -1,0 +1,119 @@
+{
+  "name": "gridxcel",
+  "version": "0.1.0",
+  "description": "Zero-dependency, streaming-first XLSX and CSV reader and writer for Node.js. Bounded memory, typed errors, an independent openpyxl oracle, and a SheetJS-compatible migration path.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./compat": {
+      "types": "./src/compat.d.ts",
+      "default": "./src/compat.js"
+    },
+    "./csv": {
+      "types": "./src/csv.d.ts",
+      "default": "./src/csv.js"
+    },
+    "./json": {
+      "types": "./src/json.d.ts",
+      "default": "./src/json.js"
+    },
+    "./xml": {
+      "types": "./src/xml.d.ts",
+      "default": "./src/xml.js"
+    },
+    "./numfmt": {
+      "types": "./src/numfmt.d.ts",
+      "default": "./src/numfmt.js"
+    },
+    "./zip": {
+      "types": "./src/zip.d.ts",
+      "default": "./src/zip.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "docs/API.md",
+    "docs/QUICKSTART.md",
+    "docs/COOKBOOK.md",
+    "docs/MIGRATION.md",
+    "docs/LIMITATIONS.md",
+    "docs/ARCHITECTURE.md",
+    "docs/BROWSER.md",
+    "docs/COMPARISON.md",
+    "docs/PERFORMANCE.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "scripts/run-tests.mjs"
+  ],
+  "scripts": {
+    "test": "node scripts/run-tests.mjs",
+    "test:one": "node scripts/run-tests.mjs",
+    "interop": "node scripts/interop.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:exports": "node scripts/check-exports-doc.mjs",
+    "check": "npm run check:docs && npm run check:exports && npm test",
+    "bench": "node scripts/bench.mjs",
+    "bench:scaling": "node --expose-gc scripts/bench-scaling.mjs",
+    "golden": "python test/make_golden.py",
+    "prepublishOnly": "npm run check"
+  },
+  "keywords": [
+    "xlsx",
+    "excel",
+    "spreadsheet",
+    "csv",
+    "tsv",
+    "dsv",
+    "ooxml",
+    "openxml",
+    "workbook",
+    "worksheet",
+    "spreadsheetml",
+    "streaming",
+    "stream",
+    "parser",
+    "reader",
+    "writer",
+    "sheetjs",
+    "sheetjs-alternative",
+    "xlsx-alternative",
+    "zero-dependency",
+    "esm",
+    "typescript",
+    "number-format",
+    "ssf",
+    "zip"
+  ],
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gridxcel/gridxcel.git",
+    "directory": "."
+  },
+  "homepage": "https://github.com/gridxcel/gridxcel#readme",
+  "bugs": {
+    "url": "https://github.com/gridxcel/gridxcel/issues"
+  },
+  "author": "gridxcel contributors",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "browser": {
+    "./src/platform.js": "./src/platform.browser.js"
+  }
+}

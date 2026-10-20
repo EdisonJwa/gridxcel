@@ -1,0 +1,36 @@
+# Dependencies
+# The package itself has none; node_modules/ exists only for local self-linking.
+node_modules/
+
+# Generated output: benchmarks, doc-example scratch, demo artefacts.
+bench/
+examples/out/
+integration/node_modules/
+integration/out/
+integration/dist/
+
+# Internal engineering records and the pre-1.0 production review: kept on disk
+# for reference, deliberately not part of the repository.
+internal/
+docs/PRODUCTION-REVIEW.md
+
+# One-off investigation scripts and throwaway probes. They were written to
+# answer a specific question during development and are not part of the tooling.
+scripts/lead-checks/
+integration/iife-probe.mjs
+integration/tla-probe.mjs
+
+# Test files that nothing runs: npm test only matches *.test.mjs, and these are
+# cited by no script, doc or example. Kept on disk, not tracked.
+test/*.smoke.mjs
+test/crcbench.mjs
+
+# Scratch output from the verification tools
+*.log
+*.out
+*.err
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp
