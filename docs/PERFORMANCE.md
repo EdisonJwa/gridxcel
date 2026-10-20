@@ -1,12 +1,57 @@
 # Performance
 
-What the parser costs, how that was measured, and the one defect that dominated
-everything else. Reproduce any number here with:
+Throughput, memory, and how each number was measured. Every figure here has a
+command that reproduces it:
 
-```
+```sh
 node --expose-gc scripts/bench-scaling.mjs          # scaling + head to head
 node --expose-gc scripts/bench.mjs --rows=200000    # throughput + peak memory
 ```
+
+The claim this library makes is a **range**, not a best sample. A single pass on a
+shared machine moves by a factor of two, so the numbers below report a
+distribution and say how many passes produced it.
+
+## Summary
+
+On a 50,000 x 8 workbook written by openpyxl, both libraries reading the same
+400,008 cells in the same process, nine passes each the median of three:
+
+| Operation | Median | Versus SheetJS CE 0.20.3 |
+| --- | --- | --- |
+| SheetJS `read` | 1,072 ms | - |
+| gridxcel `readSync` | 315 ms | 3.20x, range 2.99x - 3.32x |
+| gridxcel `read` | 281 ms | 3.50x, range 3.40x - 3.75x |
+| gridxcel `eachRow` | 286 ms | 3.41x, range 3.31x - 3.79x |
+
+Streaming is not slower than a full parse in any way that matters, and it holds
+one row instead of a workbook:
+
+| Stage (200,000 x 10) | rows/s | Peak heap | Retained |
+| --- | --- | --- | --- |
+| `eachRow` (streaming read) | 77,309 | 13.0 MiB | **5.9 MiB** |
+| `readWorkbook` (full parse) | 68,086 | 224.9 MiB | 164.9 MiB |
+| `createCSVStream` (streaming write) | ~590,000 | 1 row | **0.1 MiB** |
+| `WorkbookWriter` (streaming write) | 58,032 | 375.9 MiB | **5.8 MiB** |
+
+Streaming gives up about 12% of throughput to hold 3.6% of the heap.
+
+## Method
+
+Every timing is the median of three runs, and each suite is repeated across
+several passes; the speedup is reported as the range across those passes. Both
+libraries run in the same process, on the same bytes, in the same order, with
+warm-up runs discarded. The input workbook is written by openpyxl, so neither
+library produced it.
+
+Why the range and not the best number: repeating an identical command on this
+machine has produced speedups from 1.42x to 4.66x. Publishing the best sample as
+"the" speedup is the most common way a benchmark stops being trustworthy.
+
+---
+
+The sections below are the measurements behind those tables, and the history of
+how the synchronous path got fast.
 
 ## The finding: the scanner was quadratic in the buffer size
 

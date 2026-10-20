@@ -2,11 +2,11 @@
 
 gridxcel is a zero-dependency, streaming-first XLSX reader and writer for
 JavaScript. This document describes how the modules fit together, the data flow
-from bytes to cells, and the design decisions behind both - each with the
-reason it was taken. It is a repository document; the published user-facing set
-is [API.md](./API.md), [MIGRATION.md](./MIGRATION.md),
-[LIMITATIONS.md](./LIMITATIONS.md), [PERFORMANCE.md](./PERFORMANCE.md) and
-[BROWSER.md](./BROWSER.md).
+from bytes to cells, and the reason behind each design decision.
+
+Read it if you are changing the library, debugging a parse, or deciding whether
+to depend on a behaviour. For what the API does, see [API.md](./API.md); for what
+it does not do, [LIMITATIONS.md](./LIMITATIONS.md).
 
 ## Contents
 
@@ -16,7 +16,7 @@ is [API.md](./API.md), [MIGRATION.md](./MIGRATION.md),
 * [Sync and async pairs](#sync-and-async-pairs)
 * [Design decisions](#design-decisions)
 * [Verification](#verification)
-* [Defect status at 0.1.0](#defect-status-at-010)
+* [Defect status](#defect-status)
 * [Publishing surface](#publishing-surface)
 
 ---
@@ -311,7 +311,7 @@ mechanical check.
 
 | Check | Command | What it proves |
 | --- | --- | --- |
-| Unit and integration tests | `npm test` | 262 tests: 258 pass, 4 skipped, 0 fail. |
+| Unit and integration tests | `npm test` | 303 tests: 299 pass, 4 skipped, 0 fail. |
 | Documentation | `npm run check:docs` | Every documented symbol exists in `src/`, every doc example runs as a real ES module, every link resolves. |
 | Inverse coverage | `node scripts/check-exports-doc.mjs` | Every public export across the eight entry points is named in the documentation. |
 | Oracle interop | `node scripts/interop.mjs` | `status=pass`, 190 write checks, 37,293 read checks, 0 mismatches, `dateConvention=local`, against Python openpyxl 3.1.5 and XlsxWriter 3.2.9. |
@@ -332,23 +332,24 @@ a sample rather than a result.
 
 ---
 
-## Defect status at 0.1.0
+## Defect status
+
+No known open defects.
 
 Fixed and regression-covered: DUP-1 to DUP-8 (cell coercion, the two `utils`
 namespaces, the two `styles.xml` parsers, the weaker escaper, the three
 normalisation paths, the duplicated sheet-name rules, the unvalidated A1 decoder
-and the repeated magic values), the crafted row index that caused unbounded
-allocation (FS-1), the quadratic tag scanner (decision 11), and the quadratic
-XML text collector found by the security review.
+and the repeated magic values); the crafted row index that caused unbounded
+allocation (FS-1); the quadratic tag scanner (decision 11); the quadratic XML
+text collector found by the security review; MINOR-4 (`_xHHHH_` was not decoded
+in attribute values, so a control character in a font name did not survive);
+and MINOR-5 (the style table needed two round trips to converge).
 
-Still open, and deliberately recorded rather than hidden:
+The last two are covered by `test/style-dedup.test.mjs` and by the unicode
+suite, so a regression fails the build rather than being rediscovered.
 
-| Id | Defect | Consequence |
-| --- | --- | --- |
-| MINOR-4 | `_xHHHH_` is decoded in text nodes but not in attribute values. | A control character in a font name does not survive a round trip. |
-| MINOR-5 | The style table converges after two round trips (7 -> 8 -> 9 -> 9 cellXfs). | Two bytes and one extra pass. |
-
-See [LIMITATIONS.md](./LIMITATIONS.md) for the supported surface.
+History lives in [CHANGELOG.md](../CHANGELOG.md); this page describes the current
+design. See [LIMITATIONS.md](./LIMITATIONS.md) for the supported surface.
 
 ---
 

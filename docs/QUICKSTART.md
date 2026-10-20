@@ -4,10 +4,17 @@ From `npm install` to reading, writing and streaming a workbook. This page
 assumes you know JavaScript and nothing about XLSX, OOXML or spreadsheets as a
 file format.
 
-Every example below is executed by `npm run check:docs`, so none of it can
-drift from the implementation. Fixture paths such as
-`../../test/fixtures/golden.xlsx` resolve from where that checker runs the
-examples; substitute a path to your own file.
+Every example below is executed by `npm run check:docs`, so none of it can drift
+from the implementation. Fixture paths such as `../../test/fixtures/golden.xlsx`
+resolve from where that checker runs the examples; substitute a path to your own
+file.
+
+| I want to | Go to |
+| --- | --- |
+| Read a file into memory | [§2 Read a workbook](#2-read-a-workbook) |
+| Write a file | [§3 Write a workbook](#3-write-a-workbook) |
+| Handle a file too large for memory | [§4 Stream a workbook](#4-stream-a-workbook) |
+| Understand the data model | [Five things that trip people up](#five-things-that-trip-people-up) |
 
 ## 1. Install
 
