@@ -50,6 +50,24 @@ export interface CSVOptions {
 export declare function sheetToCSV(sheet: Sheet, opts?: CSVOptions): string;
 /** Serialise a sheet with an explicit separator. */
 export declare function sheetToDSV(sheet: Sheet, delimiter: string, opts?: CSVOptions): string;
+
+/**
+ * Sheet -> an async iterable of CSV text chunks.
+ *
+ * The streaming form of sheetToCSV: it yields the same bytes while holding one
+ * row at a time, so a 200,000 x 10 sheet retains about 0.1 MB instead of the
+ * 14.3 MB the complete string costs. Chunks break on row boundaries, because a
+ * quoted field may legally contain a newline.
+ *
+ * @param sheet a Sheet, or anything normalizeSheet accepts
+ * @param opts the sheetToCSV options, plus `bom`
+ * @param streamOpts `chunkRows` - rows per chunk, default 512
+ */
+export declare function createCSVStream(
+  sheet: Sheet,
+  opts?: CSVOptions,
+  streamOpts?: { chunkRows?: number },
+): AsyncGenerator<string, void, unknown>;
 /** Parse CSV text into a Sheet. */
 export declare function csvToSheet(text: string, opts?: CSVOptions): Sheet;
 /** Parse text with an explicit separator into a Sheet. */

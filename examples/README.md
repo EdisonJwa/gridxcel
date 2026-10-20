@@ -30,6 +30,7 @@ Whatever an example writes goes into `examples/out/`, which is gitignored.
 | [07-formulas-and-formats.mjs](./07-formulas-and-formats.mjs) | `cell.f`, `cellFormula`, display text with `cellText`, and rendering numbers with `formatValue()` |
 | [08-http-read.mjs](./08-http-read.mjs) | reading from a `fetch()` body and an `ArrayBuffer`, a CSV response, and what an HTML error page does |
 | [09-errors.mjs](./09-errors.mjs) | the `GridxcelError` hierarchy, warnings versus `strict`, and the `RANGE_TOO_LARGE` dense guard |
+| [10-stream-csv-out.mjs](./10-stream-csv-out.mjs) | stream a sheet out as CSV without holding it |
 
 ## What the examples use
 

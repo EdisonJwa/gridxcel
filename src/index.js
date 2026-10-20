@@ -25,7 +25,7 @@ import {
   sheetToAOA as sheetToAOAImpl,
   sheetToJSON as sheetToJSONImpl,
 } from "./json.js";
-import { csvToSheet as csvToSheetImpl, sheetToCSV as sheetToCSVImpl } from "./csv.js";
+import { createCSVStream, csvToSheet as csvToSheetImpl, sheetToCSV as sheetToCSVImpl } from "./csv.js";
 // One home for the display-text rule (MINOR-3): format_cell is a SheetJS method,
 // so gridxcel/compat owns its semantics and this surface calls that function
 // rather than keeping a second copy of the idea - the two copies disagreed once
@@ -51,6 +51,7 @@ export { isDateFormat, formatNumber, formatValue, serialToDate, dateToSerial, ge
 export { XmlParser, parseTag, encodeXmlText, encodeXmlAttr, decodeEntities };
 export { ZipArchive, ZipWriter, createZip, ZipError, crc32, Crc32 };
 export { VERSION, normalizeSheet, normalizeBook, normalizeCell, mergeBooks, renameSheet, countCells };
+export { createCSVStream };
 
 /* Streaming and low-level surfaces that the documentation promises. */
 export { WorkbookWriter, SheetWriter, buildParts, createBookWriter, numberLiteral };

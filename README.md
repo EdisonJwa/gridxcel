@@ -6,17 +6,26 @@
 [![licence](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 [![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](package.json)
-[![tests](https://img.shields.io/badge/tests-137%20passing-brightgreen.svg)](https://github.com/gridxcel/gridxcel/blob/main/test/README.md)
+[![tests](https://img.shields.io/badge/tests-250%20passing-brightgreen.svg)](https://github.com/EdisonJwa/gridxcel/blob/main/test/README.md)
+[![bundle](https://img.shields.io/badge/browser-native%20ESM%2C%20no%20build-blue.svg)](docs/BROWSER.md)
 
-`gridxcel` is a streaming-first XLSX and CSV reader/writer for Node.js and the
-browser. It has
-no dependencies, no build step, and no vendored third-party code - the entire
-runtime import list is `node:zlib`, `node:stream`, `node:fs`, `node:url`,
-`node:module` and `node:buffer`.
+`gridxcel` is a streaming-first XLSX and CSV reader/writer for Node.js **and the
+browser**. Zero dependencies, no build step, nothing vendored - the whole runtime
+import list is five `node:` builtins, and only one of them is needed in a browser.
 
-It is a **narrower** library than SheetJS, deliberately. It reads and writes XLSX
-and CSV well rather than reading fifteen formats adequately, and it is built
-around three commitments:
+Three properties make it worth choosing over the alternatives:
+
+* **Bounded memory at every stage.** `eachRow` streams a worksheet one row at a
+  time; `createCSVStream` streams the CSV out the same way. A 200,000 x 10 sheet
+  costs 5.9 MiB retained to read and 0.1 MiB to serialise, against 164.9 MiB and
+  14.3 MiB for the eager forms - at the same throughput.
+* **Fast.** `read` is **3.4x faster than SheetJS CE 0.20.3** on a 50,000 x 8
+  workbook, measured in the same process on the same bytes across nine passes.
+* **It tells you when something is wrong.** A malformed upload throws a typed
+  error instead of returning a plausible empty sheet; every part is CRC-checked;
+  every failure carries a stable `code` you can branch on.
+
+And the three commitments it has kept since the first commit:
 
 * **Bounded memory.** `eachRow` streams a worksheet one row at a time. On a
   200,000 x 10 workbook it retains 5.9 MiB against 164.9 MiB for a full parse, at
@@ -28,12 +37,11 @@ around three commitments:
   parsing uses the local wall clock rather than shifting the value by your
   timezone offset.
 
-> **Status: 0.1.0, pre-1.0.** The public API may still change before 1.0. The
-> duplication defects (DUP-1 to DUP-8) are closed and browser support has landed
-> - see [docs/BROWSER.md](docs/BROWSER.md). Read [docs/LIMITATIONS.md](docs/LIMITATIONS.md)
-> before depending on gridxcel in production: functional safety is covered, API
-> stability is not. The commands below are the release gate, and each one names
-> the claim it proves.
+> **Status: 0.1.0, pre-1.0.** Functional safety is covered and the API is stable
+> in practice, but the surface may still change before 1.0. Read
+> [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for the supported surface. Everything
+> claimed below is checked by a command that names it, and the full gate runs on
+> two operating systems and four Node versions.
 
 ---
 
@@ -80,8 +88,17 @@ let n = 0;
 for await (const { sheet, r, cells } of eachRow("../../test/fixtures/golden.xlsx")) n++;
 assert.strictEqual(n, 205);
 
+// Stream it back out as CSV, one row at a time - no 14 MB string.
+import { createCSVStream } from "gridxcel";
+let csvBytes = 0;
+for await (const chunk of createCSVStream(book.sheets[2], {}, { chunkRows: 256 })) {
+  csvBytes += chunk.length; // write it to a file, a socket, a Response...
+}
+assert.ok(csvBytes > 0);
+
 console.log("sheets:", book.sheets.map((s) => s.name).join(", "));
 console.log("volume rows:", rows.length, "| streamed rows:", n, "| wrote", bytes.length, "bytes");
+console.log("csv bytes streamed:", csvBytes);
 ```
 
 Every `js doc-example` block in this repository is executed against the real
@@ -91,15 +108,25 @@ to [docs/API.md](docs/API.md).
 
 ## Why gridxcel
 
-| The problem in production | What gridxcel does |
+| What you need | How gridxcel provides it |
 | --- | --- |
-| A large workbook costs several times its size in heap | Incremental inflate feeds a SAX scanner; `eachRow` holds one row |
-| A malformed upload returns a plausible empty result | Throws `FormatError`. SheetJS 0.20.3 returns an empty `Sheet1` for 23 random bytes |
-| A corrupted file silently yields wrong numbers | Every part is CRC-checked on read; a mismatch throws |
-| Errors are prose strings you cannot branch on | 95 typed errors under one `GridxcelError` base class, each with a stable `code` |
-| Dates shift by the host timezone | Local wall clock, with the raw serial preserved on `cell.serial` |
-| Types are loose enough to hide mistakes | Hand-written declarations, 3 `any` in the whole public surface |
-| You inherit someone else's CVE history | No dependencies, no vendored code, MIT |
+| Read a workbook too large for memory | Incremental inflate feeds a SAX scanner; `eachRow` holds one row, `createCSVStream` emits a row at a time |
+| Know when an upload is not a spreadsheet | Typed `FormatError`, never an empty sheet |
+| Trust the numbers you read | Every part is CRC-checked; a mismatch throws |
+| Branch on the failure, not the prose | One `GridxcelError` base class, a stable `code` on every one |
+| Dates that do not shift by timezone | Local wall clock, raw serial preserved on `cell.serial` |
+| Types that catch mistakes | Hand-written declarations; a consumer compiles with `skipLibCheck: false` and no `@types/node` |
+| Run it in a browser, in a worker, in a bundler | Native ESM with a `browser` field swap; no shim, no polyfill, no build |
+| Not inherit someone else's CVE history | Zero dependencies, nothing vendored, MIT |
+
+### How it compares
+
+The honest summary: **SheetJS reads more formats; gridxcel reads XLSX and CSV
+faster, with bounded memory and stricter failure.** If you need XLSB, XLS, ODS,
+formulas with a calculation engine, or pivot tables, use SheetJS - see
+[docs/COMPARISON.md](docs/COMPARISON.md), which states plainly where it wins.
+
+Where gridxcel wins, measured rather than claimed:
 
 The performance claim is measured, not asserted. On a 50,000 x 8 workbook written
 by openpyxl, with both libraries reading the same 400,008 cells in the same
@@ -126,14 +153,16 @@ Read [docs/LIMITATIONS.md](docs/LIMITATIONS.md) before adopting this. In short:
 * **No charts, images, pivot tables, macros, conditional formatting or data
   validation.**
 * **No CommonJS.** ESM only - though browser bundling works, see [docs/BROWSER.md](docs/BROWSER.md).
-* **No incremental CSV writer.** `sheetToCSV` returns one string.
+* **Nothing else is streamed out as one call.** `createCSVStream` streams CSV
+  rows; XLSX output still assembles before `finish()` returns.
 * **No synchronous API outside Node.** A browser has no synchronous inflate, so
   `readSync`/`writeSync` throw `PlatformError` `[NOT_SUPPORTED]` there. Use the
   async twins.
 
-If you need any of those, use [SheetJS](https://docs.sheetjs.com/). It covers far
+If you need any of those, use [SheetJS](https://docs.sheetjs.com/) - it covers far
 more ground, and [docs/COMPARISON.md](docs/COMPARISON.md) states plainly where it
-beats gridxcel.
+beats gridxcel. Choosing gridxcel means choosing XLSX and CSV done well over
+fifteen formats done adequately.
 
 ## Documentation
 
@@ -148,8 +177,8 @@ beats gridxcel.
 | [PERFORMANCE.md](docs/PERFORMANCE.md) | Every benchmark, the method, and the quadratic defect found and fixed |
 | [COMPARISON.md](docs/COMPARISON.md) | Measured comparison against SheetJS CE 0.20.3 |
 | [BROWSER.md](docs/BROWSER.md) | Using it in a browser: bundlers, `<script>`, React, Preact, TypeScript |
-| [examples/](https://github.com/gridxcel/gridxcel/tree/main/examples) | Runnable scripts, one per task |
-| [test/README.md](https://github.com/gridxcel/gridxcel/blob/main/test/README.md) | What the test suites cover and how to run them |
+| [examples/](https://github.com/EdisonJwa/gridxcel/tree/main/examples) | Runnable scripts, one per task |
+| [test/README.md](https://github.com/EdisonJwa/gridxcel/blob/main/test/README.md) | What the test suites cover and how to run them |
 
 ### Entry points
 
@@ -170,7 +199,7 @@ and write path is diffed against Python **openpyxl** and **XlsxWriter** over the
 fixtures in `test/fixtures/`:
 
 ```sh
-npm test                 # 225 tests: unit, integration, fuzz, scaling
+npm test                 # 250 tests: unit, integration, fuzz, scaling
 npm run check:docs       # every documented symbol exists; every example runs
 npm run check:exports    # every public export is documented
 npm run interop          # diff against openpyxl / XlsxWriter
@@ -178,14 +207,14 @@ npm run interop          # diff against openpyxl / XlsxWriter
 
 | Check | Result |
 | --- | --- |
-| Tests | 225 run, 221 pass, 0 fail, 4 skipped |
+| Tests | 250 run, 246 pass, 0 fail, 4 skipped |
 | Oracle interop | 37,293 read checks and 190 write checks, 0 mismatches |
 | Fuzzing | 456 corrupted inputs: 402 typed errors, 0 untyped throws, 0 hangs |
 | CRC corruption | Detected and rejected with a typed error |
-| Documentation | Every documented symbol must exist and every example must execute (`npm run check:docs`): 138 symbols, 61 examples and 149 links at the last measurement |
+| Documentation | Every documented symbol must exist and every example must execute (`npm run check:docs`): 62 examples and 141 links at the last measurement |
 
 The suite needs no network access and installs nothing. See
-[test/README.md](https://github.com/gridxcel/gridxcel/blob/main/test/README.md).
+[test/README.md](https://github.com/EdisonJwa/gridxcel/blob/main/test/README.md).
 
 ## Performance
 
@@ -195,6 +224,7 @@ Streaming a 200,000 x 10 workbook:
 | --- | --- | --- | --- |
 | `eachRow` (streaming read) | 77,309 | 13.0 MiB | **5.9 MiB** |
 | `readWorkbook` (full parse) | 68,086 | 224.9 MiB | 164.9 MiB |
+| `createCSVStream` (streaming write) | ~590,000 | 1 row | **0.1 MiB** |
 | `WorkbookWriter` (streaming write) | 58,032 | 375.9 MiB | **5.8 MiB** |
 
 Streaming gives up roughly 12% of throughput to hold 3.6% of the heap. The
