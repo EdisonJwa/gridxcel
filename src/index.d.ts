@@ -210,7 +210,7 @@ export class StrictWarningError extends GridxcelError { warning: Warning }
 export class PlatformError extends GridxcelError {}
 
 /** Read a workbook from bytes, a path, a stream, or an async iterable. */
-export function read(input: Uint8Array | ArrayBuffer | string | ReadableStream | AsyncIterable<Uint8Array>, options?: ReadOptions): Promise<Workbook>;
+export function read(input: Uint8Array | ArrayBuffer | string | ByteStream | AsyncIterable<Uint8Array>, options?: ReadOptions): Promise<Workbook>;
 /** Read synchronously from bytes (Node only). */
 export function readSync(bytes: Uint8Array | ArrayBuffer, options?: ReadOptions): Workbook;
 /** Read only the sheet names, without parsing cells. */
@@ -232,7 +232,7 @@ export function readJSON<T = Record<string, unknown>>(input: Uint8Array | string
 
 export interface RowEvent { sheet: string; r: number; cells: Cell[] }
 /** Stream rows with bounded memory. */
-export function eachRow(input: Uint8Array | string | ReadableStream | AsyncIterable<Uint8Array>, options?: ReadOptions): AsyncIterable<RowEvent>;
+export function eachRow(input: Uint8Array | string | ByteStream | AsyncIterable<Uint8Array>, options?: ReadOptions): AsyncIterable<RowEvent>;
 
 export function normalizeSheet(input: AOA | Sheet, name?: string): Sheet;
 export function normalizeBook(input: Workbook | AOA | object, options?: WriteOptions): Workbook;
