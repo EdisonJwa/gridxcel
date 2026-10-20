@@ -157,3 +157,77 @@ test("formats: write emits SYLK and DIF, and each reads back", async () => {
     assert.deepEqual(back.sheets[0].rows[1].map((c) => c.v), [1, 2], bookType);
   }
 });
+
+/* ------------------------------------------------ regression: review findings */
+
+test("sylk: a quoted K decides the type, not the characters", () => {
+  // K"1e5" is the string "1e5"; K1e5 is the number 100000. Looking only at the
+  // characters silently converted one into the other.
+  const text = 'ID;P\r\nC;Y1;X1;K"1e5"\r\nC;Y1;X2;K1e5\r\nC;Y2;X1;K"42"\r\nC;Y2;X2;K42\r\nE\r\n';
+  const sheet = sylkToSheet(text);
+  assert.equal(sheet.rows[0][0].t, "string");
+  assert.equal(sheet.rows[0][0].v, "1e5");
+  assert.equal(sheet.rows[0][1].t, "number");
+  assert.equal(sheet.rows[0][1].v, 100000);
+  assert.equal(sheet.rows[1][0].t, "string", 'K"42" is text');
+  assert.equal(sheet.rows[1][0].v, "42");
+  assert.equal(sheet.rows[1][1].t, "number", "K42 is a number");
+});
+
+test("sylk: the writer quotes a string that would otherwise read as a number", () => {
+  const sheet = aoaToSheet([["42", "1e5", "TRUE", "NA", "plain"]]);
+  const back = sylkToSheet(sheetToSYLK(sheet));
+  assert.deepEqual(back.rows[0].map((c) => c.t), ["string", "string", "string", "string", "string"]);
+  assert.deepEqual(back.rows[0].map((c) => c.v), ["42", "1e5", "TRUE", "NA", "plain"]);
+});
+
+test("sylk: an empty string survives a round trip", () => {
+  const sheet = aoaToSheet([["a", "", "c"]]);
+  const back = sylkToSheet(sheetToSYLK(sheet));
+  assert.equal(back.rows[0][1].t, "string");
+  assert.equal(back.rows[0][1].v, "");
+});
+
+test("sylk: a coordinate that would allocate gigabytes is refused, not attempted", () => {
+  // Twenty bytes claiming a billion rows. Before the bound this exhausted the
+  // heap and aborted the process, which is not a catchable failure.
+  for (const text of [
+    "ID;P\r\nC;Y999999999;X1;K1\r\nE\r\n",
+    "ID;P\r\nC;Y1;X999999999;K1\r\nE\r\n",
+    "ID;P\r\nB;Y999999999;X1\r\nE\r\n",
+  ]) {
+    assert.throws(() => sylkToSheet(text), (e) => e.code === "RANGE_TOO_LARGE", "should refuse " + JSON.stringify(text.slice(0, 30)));
+  }
+});
+
+test("dif: an empty string is a value, not an absent cell", () => {
+  const sheet = aoaToSheet([["a", "", "c"], ["", "b", ""]]);
+  const back = difToSheet(sheetToDIF(sheet));
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 3; c++) {
+      assert.ok(back.rows[r][c], "cell " + r + "," + c + " must exist");
+      assert.equal(back.rows[r][c].t, "string");
+    }
+  }
+  assert.equal(back.rows[0][1].v, "");
+});
+
+test("dif: a header count that would allocate gigabytes is refused", () => {
+  for (const [header, count] of [["VECTORS", 999999999], ["TUPLES", 999999999]]) {
+    const text = [
+      "TABLE", "0,1", '""',
+      header, "0," + count, '""',
+      "DATA", "0,0", '""',
+      "-1,0", "BOT", "0,1", "V", "-1,0", "EOD",
+    ].join("\r\n") + "\r\n";
+    assert.throws(() => difToSheet(text), (e) => e.code === "RANGE_TOO_LARGE", "should refuse " + header);
+  }
+});
+
+test("formats: a row that ends in empty cells keeps its column count", () => {
+  const sheet = aoaToSheet([["a", "b", "c"], ["", "", ""]]);
+  for (const [to, from] of [[sheetToSYLK, sylkToSheet], [sheetToDIF, difToSheet]]) {
+    const back = from(to(sheet));
+    assert.equal(back.columnCount, 3, "columnCount must survive trailing empties");
+  }
+});

@@ -27,6 +27,13 @@ import { GridxcelError } from "./errors.js";
 import { blankSheet, cellFromValue, dateCell } from "./json.js";
 import { DEFAULT_SHEET_NAME } from "./constants.js";
 
+/**
+ * The largest cell a SYLK file may address. A SYLK row or column number is a
+ * plain integer with no bound in the format, so a 29-byte file can claim a billion rows; the reader refuses rather than allocating.
+ */
+const MAX_ROWS = 1048576;
+const MAX_COLS = 16384;
+
 /** Record terminators. SYLK is line-based; Excel writes CRLF. */
 const RECORD_END = /\r\n|\n|\r/;
 
@@ -40,41 +47,52 @@ function splitRecord(record) {
   let i = 0;
   const n = record.length;
   while (i <= n) {
-    const start = i;
-    let field = "";
-    // A field's first character is its id letter.
+    const atStart = i;
+    let text = "";
+    let quoted = false;
+    // A field's first character is its id letter; a quote may follow it (K"x").
     while (i < n && record.charCodeAt(i) !== 59) {
       const c = record.charCodeAt(i);
       if (c === 34) {
+        quoted = true;
         // Quoted section: copy until the matching quote, doubling to escape.
         i++;
         for (;;) {
           if (i >= n) throw new GridxcelError("unterminated quoted field in SYLK record " + JSON.stringify(record), "BAD_SYMBOL");
           const q = record.charCodeAt(i);
           if (q === 34) {
-            if (record.charCodeAt(i + 1) === 34) { field += '"'; i += 2; continue; }
+            if (record.charCodeAt(i + 1) === 34) { text += '"'; i += 2; continue; }
             i++;
             break;
           }
-          field += record[i];
+          text += record[i];
           i++;
         }
         continue;
       }
-      field += record[i];
+      text += record[i];
       i++;
     }
-    out.push(field);
+    out.push({ text, quoted });
     if (i >= n) break;
     i++; // skip the ';'
-    if (i > start && i >= n) { out.push(""); break; }
+    if (i > atStart && i >= n) { out.push({ text: "", quoted: false }); break; }
   }
   return out;
 }
 
-/** Decode a `K` field: a number, a quoted string, or one of the logic words. */
-function cellFromK(raw) {
-  if (raw === undefined || raw === "") return undefined;
+/**
+ * Decode a `K` field: a number, a quoted string, or one of the logic words.
+ *
+ * Quotedness decides the type, not the characters. K"1e5" is the string "1e5"
+ * and K1e5 is the number 100000; a reader that only looks at the characters
+ * silently converts one into the other, which is data loss that survives a
+ * round trip unnoticed. The same applies to K"42" and to an empty K"".
+ */
+function cellFromK(raw, quoted) {
+  if (raw === undefined) return undefined;
+  if (quoted) return cellFromValue(raw);
+  if (raw === "") return undefined;
   const trimmed = raw.trim();
   if (trimmed === "TRUE") return cellFromValue(true);
   if (trimmed === "FALSE") return cellFromValue(false);
@@ -101,7 +119,7 @@ export function sylkToSheet(text, opts = {}) {
   const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const records = src.split(RECORD_END).filter((r) => r.length > 0);
 
-  if (!records.length || splitRecord(records[0])[0].toUpperCase() !== "ID") {
+  if (!records.length || splitRecord(records[0])[0].text.toUpperCase() !== "ID") {
     throw new GridxcelError("not a SYLK file: the first record must be ID", "BAD_SYMBOL", { first: records[0] === undefined ? "" : records[0].slice(0, 40) });
   }
 
@@ -115,26 +133,37 @@ export function sylkToSheet(text, opts = {}) {
 
   for (const record of records) {
     const fields = splitRecord(record);
-    const id = fields[0].toUpperCase();
+    const id = fields[0].text.toUpperCase();
     if (id === "C") {
       let y = lastY;
       let x = lastX;
       let k;
+      let kQuoted = false;
       for (let i = 1; i < fields.length; i++) {
         const f = fields[i];
-        if (f.length === 0) continue;
-        const tag = f[0].toUpperCase();
-        const value = f.slice(1);
+        if (f.text.length === 0) continue;
+        const tag = f.text[0].toUpperCase();
+        const value = f.text.slice(1);
         if (tag === "Y") y = parseInt(value, 10);
         else if (tag === "X") x = parseInt(value, 10);
-        else if (tag === "K") k = value;
+        else if (tag === "K") { k = value; kQuoted = f.quoted; }
       }
       if (!(y > 0) || !(x > 0)) {
         throw new GridxcelError("SYLK cell record has no usable coordinates " + JSON.stringify(record), "BAD_SYMBOL");
       }
+      // A SYLK file is untrusted input: "C;Y999999999;X1;K1" is 29 bytes with its
+      // ID and E records and would make the materialisation loop below allocate
+      // gigabytes. The XLSX
+      // reader learned this the hard way (FS-1); the same bound applies here.
+      if (y > MAX_ROWS || x > MAX_COLS) {
+        throw new GridxcelError(
+          "SYLK cell at row " + y + ", column " + x + " is beyond the supported extent (" +
+            MAX_ROWS + " rows x " + MAX_COLS + " columns); refusing to allocate it",
+          "RANGE_TOO_LARGE", { row: y, col: x });
+      }
       lastY = y;
       lastX = x;
-      const cell = cellFromK(k);
+      const cell = cellFromK(k, kQuoted);
       if (cell === undefined) continue;
       let row = byRow.get(y);
       if (row === undefined) { row = []; byRow.set(y, row); }
@@ -145,8 +174,18 @@ export function sylkToSheet(text, opts = {}) {
       // Bounds only: a hint, not a promise. The cells decide what is present.
       for (let i = 1; i < fields.length; i++) {
         const f = fields[i];
-        if (!f) continue;
-        if (f[0].toUpperCase() === "Y") rowCount = Math.max(rowCount, parseInt(f.slice(1), 10) || 0);
+        if (!f || !f.text) continue;
+        if (f.text[0].toUpperCase() === "Y") {
+          const declared = parseInt(f.text.slice(1), 10) || 0;
+          // The bounds record alone can claim an unbounded extent.
+          if (declared > MAX_ROWS) {
+            throw new GridxcelError(
+              "SYLK bounds record declares " + declared + " rows, beyond the supported extent of " +
+                MAX_ROWS + "; refusing to allocate it",
+              "RANGE_TOO_LARGE", { rows: declared });
+          }
+          rowCount = Math.max(rowCount, declared);
+        }
       }
     }
   }
@@ -161,9 +200,25 @@ export function sylkToSheet(text, opts = {}) {
 /**
  * Quote a field for SYLK if it contains a separator, a quote or a line break.
  */
+/**
+ * Quote a SYLK value.
+ *
+ * Quoting is not only about separators. The reader decides a cell's type from
+ * whether K was quoted, so a STRING that reads as a number ("42", "1e5") or as a
+ * logical word ("TRUE") must be quoted or it comes back as a different type.
+ * That is silent data loss, so the test here is deliberately broad.
+ */
 function q(value) {
   const s = String(value);
-  if (s.indexOf(";") < 0 && s.indexOf('"') < 0 && s.indexOf("\r") < 0 && s.indexOf("\n") < 0) return s;
+  const needsQuotes =
+    s === "" ||
+    s.indexOf(";") >= 0 ||
+    s.indexOf('"') >= 0 ||
+    // Would read back as a number.
+    (s.trim() !== "" && Number.isFinite(Number(s))) ||
+    // Would read back as a logical word or an error.
+    s === "TRUE" || s === "FALSE" || s === "NA" || s === "#N/A";
+  if (!needsQuotes) return s;
   return '"' + s.replace(/"/g, '""') + '"';
 }
 
@@ -198,8 +253,21 @@ export function sheetToSYLK(sheet, opts = {}) {
         // SYLK has no date type: write the serial, which is what the cell holds.
         k = String(cell.serial !== undefined ? cell.serial : cell.v);
       } else if (cell.t === "number") k = String(cell.v);
-      else k = q(cell.v === undefined || cell.v === null ? "" : cell.v);
-      if (k === "") continue;
+      else {
+        const text = cell.v === undefined || cell.v === null ? "" : String(cell.v);
+        // Refuse rather than emit a file this parser cannot read back: a record
+        // is one line, and there is no escape for a newline in the format.
+        if (text.indexOf("\n") >= 0 || text.indexOf("\r") >= 0) {
+          throw new GridxcelError(
+            "cannot write a SYLK cell containing a line break (row " + y + ", column " + x +
+              "); SYLK records are line-based and the format has no escape for it - " +
+              "write CSV or DIF instead, or strip the newline",
+            "UNREPRESENTABLE", { row: y, col: x });
+        }
+        k = q(text);
+      }
+      // An empty string is a value, and q("") is the two characters '""', so it
+      // is never empty here - a cell that would write nothing was dropped.
       out.push("C;Y" + y + ";X" + x + ";K" + k);
     }
   }

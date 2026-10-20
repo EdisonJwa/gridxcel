@@ -27,6 +27,14 @@ import { GridxcelError } from "./errors.js";
 import { blankSheet, cellFromValue } from "./json.js";
 import { DEFAULT_SHEET_NAME } from "./constants.js";
 
+/**
+ * The largest cell a DIF file may address. The predecessor formats carry row and
+ * column counts as plain integers, so an 85-byte file can claim a billion of
+ * either; the reader refuses rather than allocating.
+ */
+const MAX_ROWS = 1048576;
+const MAX_COLS = 16384;
+
 /** DIF is line-based; accept CRLF, LF or a lone CR. */
 const LINE_END = /\r\n|\n|\r/;
 
@@ -61,7 +69,10 @@ function difChunk(pairLine, nextLine) {
     if (s.length >= 2 && s.charCodeAt(0) === 34 && s.charCodeAt(s.length - 1) === 34) {
       s = s.slice(1, -1).replace(/""/g, '"');
     }
-    return { cell: s === "" ? null : cellFromValue(s) };
+    // An empty STRING is a value, not an absent cell: a spreadsheet distinguishes
+    // "" from an empty cell, and the writer emits 1,0 / "" to hold a column.
+    // Returning null here turned every empty string into a hole on round trip.
+    return { cell: cellFromValue(s) };
   }
   return null;
 }
@@ -91,7 +102,21 @@ export function difToSheet(text, opts = {}) {
   // misaligned every row in the first attempt.
   let at = 0;
   for (; at < lines.length; at += 3) {
-    if (lines[at].trim().toUpperCase() === "DATA") { at += 3; break; }
+    const id = lines[at].trim().toUpperCase();
+    if (id === "DATA") { at += 3; break; }
+    // VECTORS declares columns, TUPLES declares rows. Both are hints, but a
+    // caller sizes work from them, so an absurd claim is refused rather than
+    // reported.
+    if (id === "VECTORS" || id === "TUPLES") {
+      const declared = Number((lines[at + 1] || "").split(",")[1]);
+      const limit = id === "VECTORS" ? MAX_COLS : MAX_ROWS;
+      if (Number.isFinite(declared) && declared > limit) {
+        throw new GridxcelError(
+          "DIF header declares " + declared + " " + (id === "VECTORS" ? "columns" : "rows") +
+            ", beyond the supported extent of " + limit + "; refusing to allocate it",
+          "RANGE_TOO_LARGE", { [id === "VECTORS" ? "columns" : "rows"]: declared });
+      }
+    }
   }
   let row = null;
   for (; at + 1 < lines.length; at += 2) {
@@ -113,11 +138,6 @@ export function difToSheet(text, opts = {}) {
   return sheet;
 }
 
-/** Quote a DIF string value. */
-function quoteDif(value) {
-  return '"' + String(value).replace(/"/g, '""') + '"';
-}
-
 /**
  * Sheet -> DIF text.
  *
@@ -125,6 +145,25 @@ function quoteDif(value) {
  * @param {object} [opts] `{ eol?: string }`
  * @returns {string}
  */
+/**
+ * Format a DIF string value, refusing one this parser could not read back.
+ *
+ * A DIF chunk is two LINES. A value containing a newline would split into extra
+ * lines, shift every following chunk, and be read back as garbage rather than
+ * raising - so the writer refuses instead. DIF has no escape for it.
+ */
+function difString(value, row, col) {
+  const text = value === undefined || value === null ? "" : String(value);
+  if (text.indexOf("\n") >= 0 || text.indexOf("\r") >= 0) {
+    throw new GridxcelError(
+      "cannot write a DIF cell containing a line break (row " + row + ", column " + col +
+        "); DIF chunks are line-based and the format has no escape for it - " +
+        "write CSV instead, or strip the newline",
+      "UNREPRESENTABLE", { row, col });
+  }
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
 export function sheetToDIF(sheet, opts = {}) {
   const eol = typeof opts.eol === "string" ? opts.eol : "\r\n";
   const rows = sheet.rows || [];
@@ -137,10 +176,12 @@ export function sheetToDIF(sheet, opts = {}) {
     "TUPLES", "0," + rows.length, '""',
     "DATA", "0,0", '""',
   ];
-  for (const row of rows) {
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
     // A row starts with the directive chunk -1,0 / BOT.
     out.push("-1,0", "BOT");
-    for (const cell of row) {
+    for (let c = 0; c < row.length; c++) {
+      const cell = row[c];
       if (cell === undefined || cell === null || cell.t === "empty") {
         // DIF has no empty cell: a blank string keeps the column position, which
         // is what a spreadsheet exports for a hole.
@@ -155,7 +196,7 @@ export function sheetToDIF(sheet, opts = {}) {
         out.push("0," + serial, "V");
         continue;
       }
-      out.push("1,0", `"` + String(cell.v === undefined || cell.v === null ? "" : cell.v).replace(/"/g, '""') + `"`);
+      out.push("1,0", difString(cell.v, r + 1, c + 1));
     }
   }
   out.push("-1,0", "EOD");

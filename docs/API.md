@@ -1354,6 +1354,16 @@ Reader and writer codes a caller is likely to branch on: `NO_SHEETS`,
 `BAD_BOOK`, `BAD_ROW`, `ROW_ORDER`, `SHEET_CLOSED`, `WRITER_CLOSED`,
 `BAD_VALUE`, `BAD_STYLE`, `RANGE_TOO_LARGE` and `NOT_SUPPORTED`.
 
+The text-format parsers add three more. `BAD_SYMBOL` and `BAD_DIF` mean the text
+is not that format. `RANGE_TOO_LARGE` is raised by `sylkToSheet` and
+`difToSheet` too, for the same reason the dense-range guard exists: both formats
+carry row and column numbers as unbounded integers, so a 29-byte file claiming a
+billion rows is a legal document by the grammar and an allocation the process
+cannot survive. `UNREPRESENTABLE` means the value cannot be expressed in the target
+format at all - currently a line break in a SYLK or DIF cell, which those
+line-based grammars have no escape for. The writer refuses rather than emitting a
+file it could not itself read back.
+
 Outside Node, the synchronous entry points (`readSync`, `writeWorkbookSync`,
 `ZipArchive.bytes()`) and the path helpers (`readFile`, `writeFile`) throw
 `PlatformError` with code `NOT_SUPPORTED`, naming the async alternative, rather
@@ -1466,9 +1476,9 @@ legacy interchange formats Excel still reads and writes.
 | Export | Signature | Notes |
 | --- | --- | --- |
 | `sylkToSheet` | `(text, opts?) -> Sheet` | SYLK to a Sheet. An omitted `Y` or `X` reuses the previous coordinate, as real files rely on. |
-| `sheetToSYLK` | `(sheet, opts?) -> string` | Sheet to SYLK. A date is written as its serial: SYLK has no date type. |
+| `sheetToSYLK` | `(sheet, opts?) -> string` | Sheet to SYLK. A date is written as its serial and comes back as a number: SYLK has no date type. |
 | `difToSheet` | `(text, opts?) -> Sheet` | DIF to a Sheet, per the 1981 specification. |
-| `sheetToDIF` | `(sheet, opts?) -> string` | Sheet to DIF. A date is written as its serial: DIF has no date type. |
+| `sheetToDIF` | `(sheet, opts?) -> string` | Sheet to DIF. A date is written as its serial and comes back as a number: DIF has no date type. |
 
 `opts.name` sets the sheet name; `opts.eol` sets the line ending (CRLF by
 default, which is what Excel writes).

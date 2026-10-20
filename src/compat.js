@@ -203,10 +203,11 @@ function decodeText(bytes) {
 /**
  * Sniff which text format this is.
  *
- * A SYLK file begins with the `ID` record; a DIF file begins with
- * `TABLE\n0,1`. CSV has no signature, so it is the fallback - which is also why
- * guessing is safe here: a CSV whose first cell happens to be "ID" needs the
- * literal `{ bookType: "csv" }` to say so, and that option exists.
+ * A SYLK file begins with the `ID` record; a DIF file begins with `TABLE`.
+ * CSV has no signature, so it is the fallback, and that fallback is not free: a
+ * CSV whose first field happens to be "ID" or "TABLE" would be misread. The sniff
+ * therefore requires the full signature ("ID;", "TABLE\n"), not just the word,
+ * and `{ bookType: "csv" }` overrides it when a file is genuinely ambiguous.
  *
  * Sniffing rather than requiring bookType matters for migration: SheetJS picks
  * the format from the content, and so does every caller who has been handing it
@@ -215,9 +216,15 @@ function decodeText(bytes) {
 function sniffTextFormat(text, opts) {
   if (opts.bookType === "csv" || opts.bookType === "txt") return "csv";
   if (opts.bookType !== undefined && opts.bookType !== null) return String(opts.bookType);
-  const head = text.length > 512 ? text.slice(0, 512) : text;
-  if (/^ID;/.test(head)) return "sylk";
-  if (/^TABLE\r?\n/.test(head)) return "dif";
+  // A BOM is not part of the format; comparing against it made BOM-prefixed SYLK
+  // fall through to CSV. Both parsers strip it themselves.
+  const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const head = src.length > 512 ? src.slice(0, 512) : src;
+  // SYLK must begin with the ID record. A leading blank line is tolerated by some
+  // writers, so skip leading whitespace before deciding.
+  const fromFirstToken = head.replace(/^(?:[ \t]*[\r\n])+[ \t]*/, "");
+  if (/^ID;/.test(fromFirstToken)) return "sylk";
+  if (/^TABLE\r?\n/.test(fromFirstToken)) return "dif";
   return "csv";
 }
 
