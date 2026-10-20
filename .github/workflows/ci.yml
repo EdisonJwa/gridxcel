@@ -59,6 +59,10 @@ jobs:
         run: |
           cd integration
           npm install --no-audit --no-fund
+          # The harness imports the published specifier "gridxcel" on purpose: it
+          # is what a consumer writes. That needs node_modules/gridxcel to exist,
+          # which it does not on a fresh clone.
+          node link-self.mjs
           node run-all.mjs
       # The real-browser leg launches an actual Chrome. The runner's preinstalled
       # browser is not at a path we can rely on, so install a known-good one and
@@ -77,6 +81,7 @@ jobs:
         run: |
           cd integration
           npm install --no-audit --no-fund
+          node link-self.mjs
           node real-browser.test.mjs
       # The full harness on the leg that has python: it diffs every fixture in
       # both directions, which the node:test copy only partly mirrors.

@@ -9,7 +9,8 @@
     "vite": "node vite.test.mjs",
     "react": "node react.test.mjs",
     "types": "tsc --project types/tsconfig.json",
-    "chrome": "node real-browser.test.mjs"
+    "chrome": "node real-browser.test.mjs",
+    "link": "node link-self.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

@@ -1,13 +1,19 @@
 
 import * as g from "../src/index.js";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert";
 
-const F = (n) => import.meta.dirname + "/fixtures/" + n;  // string paths, not URL objects
+// import.meta.dirname is Node 20.11+, and this package supports Node 18, so
+// derive the directory from the module URL instead. Without this the fixture
+// path silently became "undefined/fixtures/..." on 18 and every read threw ENOENT.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const F = (n) => HERE + "/fixtures/" + n;  // string paths, not URL objects
 // Scratch output goes next to the benchmarks, which are generated on demand and
 // not tracked. git cannot create an empty directory, so make it here rather than
 // assuming a previous run left one behind.
-const BENCH = import.meta.dirname + "/../bench";
+const BENCH = HERE + "/../bench";
 mkdirSync(BENCH, { recursive: true });
 
 console.log("=== 1. read every fixture ===");

@@ -15,6 +15,14 @@ const SUITES = [
   ["published types compile for a consumer", "types.test.mjs"],
 ];
 
+// The suites import the published specifier "gridxcel", so it has to resolve.
+// Idempotent: a no-op when node_modules already has it.
+const link = spawnSync(process.execPath, [join(here, "link-self.mjs")], { cwd: here, encoding: "utf8" });
+if (link.status !== 0) {
+  console.error("could not link gridxcel into the harness:\n" + (link.stderr || ""));
+  process.exit(1);
+}
+
 let failed = 0;
 for (const [label, file] of SUITES) {
   console.log("\n=== " + label + " ===");

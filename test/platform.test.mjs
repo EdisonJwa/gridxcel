@@ -77,13 +77,29 @@ test("platform: Node uses node:zlib, the browser cannot reach it", () => {
   assert.match(refused.err.message, /async/);
 });
 
-test("platform: the Web backend round-trips and is feature-detected, not assumed", async () => {
+test("platform: the Web backend round-trips and is feature-detected, not assumed", async (t) => {
   // Evidence, not assumption: a format the host does not know must be rejected,
   // otherwise hasWebDeflate() would answer true blindly.
   assert.throws(() => new DecompressionStream("deflate-raw-not-a-format"), TypeError);
 
-  assert.equal(webPlatform.hasWebDeflate(), true);
-  assert.equal(nodePlatform.hasWebDeflate(), true, "Node 18+ also provides the Web streams");
+  // The Web streams exist on Node 18 but do NOT accept "deflate-raw" - that
+  // arrived in Node 20. So this is exactly the case the feature detection is for:
+  // assert that the answer MATCHES reality, not that it is true. Asserting true
+  // made the suite fail on 18 while the code was right.
+  let streamsSupportRaw = false;
+  try {
+    new CompressionStream("deflate-raw");
+    new DecompressionStream("deflate-raw");
+    streamsSupportRaw = true;
+  } catch { streamsSupportRaw = false; }
+  assert.equal(webPlatform.hasWebDeflate(), streamsSupportRaw, "hasWebDeflate must match the host");
+  assert.equal(nodePlatform.hasWebDeflate(), streamsSupportRaw, "both surfaces answer alike");
+
+  if (!streamsSupportRaw) {
+    // Documented floor: the browser path needs a host that supports deflate-raw.
+    t.diagnostic("host has no deflate-raw support; the Web backend round trip cannot run here");
+    return;
+  }
 
   const web = await webPlatform.deflateBackend();
   assert.equal(web.kind, "web");
