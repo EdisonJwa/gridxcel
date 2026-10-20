@@ -72,7 +72,9 @@ function isLiteralEscapeAt(s, i) {
 const LITERAL_ESCAPE_PREFIX = "_x005F_";
 
 export function encodeXmlText(s) {
-  if (!/[&<>\x00-\x08\x0b\x0c\x0e-\x1f]|_x[0-9A-Fa-f]{4}_/.test(s)) return s;
+  // \ud800-\udfff covers both a well-formed pair and a lone surrogate; the loop
+  // below escapes only the lone ones, leaving a valid pair intact.
+  if (!/[&<>\x00-\x08\x0b\x0c\x0e-\x1f]|_x[0-9A-Fa-f]{4}_|[\ud800-\udfff]/.test(s)) return s;
   let out = "";
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
@@ -86,10 +88,29 @@ export function encodeXmlText(s) {
       const code = s.charCodeAt(i);
       if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) {
         out += "_x" + code.toString(16).toUpperCase().padStart(4, "0") + "_";
+      } else if (code >= 0xd800 && code <= 0xdbff && !isLowSurrogateAt(s, i + 1)) {
+        // High surrogate not followed by a low one: a lone code unit.
+        out += "_x" + code.toString(16).toUpperCase().padStart(4, "0") + "_";
+      } else if (code >= 0xdc00 && code <= 0xdfff && !isHighSurrogateAt(s, i - 1)) {
+        out += "_x" + code.toString(16).toUpperCase().padStart(4, "0") + "_";
       } else out += ch;
     }
   }
   return out;
+}
+
+/** True when s[at] is a low (trailing) surrogate, i.e. it completes the pair. */
+function isLowSurrogateAt(s, at) {
+  if (at < 0 || at >= s.length) return false;
+  const c = s.charCodeAt(at);
+  return c >= 0xdc00 && c <= 0xdfff;
+}
+
+/** True when s[at] is a high (leading) surrogate, i.e. it opened the pair. */
+function isHighSurrogateAt(s, at) {
+  if (at < 0 || at >= s.length) return false;
+  const c = s.charCodeAt(at);
+  return c >= 0xd800 && c <= 0xdbff;
 }
 
 export function encodeXmlAttr(s) {
@@ -108,8 +129,13 @@ export function encodeXmlAttr(s) {
       i += 6;
     } else {
       const code = s.charCodeAt(i);
-      if (code < 0x20) out += "_x" + code.toString(16).toUpperCase().padStart(4, "0") + "_";
-      else out += ch;
+      if (code < 0x20) {
+        out += "_x" + code.toString(16).toUpperCase().padStart(4, "0") + "_";
+      } else if (code >= 0xd800 && code <= 0xdbff && !isLowSurrogateAt(s, i + 1)) {
+        out += "_x" + code.toString(16).toUpperCase().padStart(4, "0") + "_";
+      } else if (code >= 0xdc00 && code <= 0xdfff && !isHighSurrogateAt(s, i - 1)) {
+        out += "_x" + code.toString(16).toUpperCase().padStart(4, "0") + "_";
+      } else out += ch;
     }
   }
   return out;

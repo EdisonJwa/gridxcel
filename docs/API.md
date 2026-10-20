@@ -1364,6 +1364,15 @@ format at all - currently a line break in a SYLK or DIF cell, which those
 line-based grammars have no escape for. The writer refuses rather than emitting a
 file it could not itself read back.
 
+The writer validates its own inputs for the same reason. A column width that is
+not a finite positive number, an autofilter or merge that is not a range, and a
+freeze pane outside the grid are all `BAD_VALUE`, `BAD_RANGE` or
+`RANGE_TOO_LARGE` rather than being written through: an impossible coordinate
+produces a file Excel has to repair, and the failure then belongs to whoever
+opens it. On the read side the same malformed input is tolerated instead -
+a `<mergeCell ref>` that is not a range is dropped with a `BAD_MERGE` warning,
+because a reader's job is to survive a bad file, not to reject it.
+
 Outside Node, the synchronous entry points (`readSync`, `writeWorkbookSync`,
 `ZipArchive.bytes()`) and the path helpers (`readFile`, `writeFile`) throw
 `PlatformError` with code `NOT_SUPPORTED`, naming the async alternative, rather

@@ -360,7 +360,13 @@ class RowScanner {
         this.openCell(attrs, selfClose);
         break;
       case "mergeCell":
-        if (attrs.ref) this.merges.push(attrs.ref);
+        if (attrs.ref) {
+          // A merge ref is a range. Passing a malformed one straight through put
+          // "NOTAREF" on sheet.merges, where a consumer would hand it to a range
+          // library and fail far from the file that caused it.
+          if (isRangeRef(attrs.ref)) this.merges.push(attrs.ref);
+          else this.warnOnce("BAD_MERGE", "ignoring a mergeCell whose ref is not a range: " + JSON.stringify(attrs.ref), { ref: attrs.ref });
+        }
         break;
       case "pane":
         this.readPane(attrs);
@@ -740,6 +746,21 @@ function tabColorOf(attrs) {
 function localOf(name) {
   const space = name.indexOf(" ");
   return localName(space >= 0 ? name.slice(0, space) : name);
+}
+
+/**
+ * True when a string is a usable A1 range reference ("A1", "A1:B2", "$A$1:$B$2").
+ *
+ * The reader's job is to reject nonsense, not to normalise a ref that is already
+ * reasonable, so this is structural. Before it, a malformed <mergeCell ref> was
+ * pushed onto sheet.merges verbatim - a consumer would hand "NOTAREF" to a range
+ * library and fail far from the file that caused it.
+ */
+function isRangeRef(ref) {
+  if (typeof ref !== "string" || ref.length === 0 || ref.length > 32) return false;
+  const parts = ref.split(":");
+  if (parts.length > 2) return false;
+  return parts.every((part) => /^\$?[A-Za-z]{1,3}\$?[0-9]{1,7}$/.test(part));
 }
 
 /**

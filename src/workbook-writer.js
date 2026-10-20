@@ -15,7 +15,7 @@ import { ZipWriter } from "./zip.js";
 import { encodeXmlText, encodeXmlAttr } from "./xml.js";
 import { XML_DECL, NS_MAIN, NS_REL, NS_PKG_REL, NS_CT, NS_CP, NS_DC, NS_DCTERMS, NS_DCMITYPE, NS_XSI, NS_EP, NS_VT } from "./constants.js";
 import { GridxcelError } from "./errors.js";
-import { encodeCell, decodeRange, boundsToRef, makeBounds, extendBounds } from "./address.js";
+import { encodeCell, encodeRange, decodeRange, boundsToRef, makeBounds, extendBounds } from "./address.js";
 import { dateToSerial, BUILTIN_FORMATS } from "./numfmt.js";
 import { StyleTable, normalizeColor, colorAttrs, colorElement } from "./style-registry.js";
 // Shared interfaces: value coercion lives in
@@ -27,6 +27,19 @@ import { freeSheetName, validateSheetName } from "./api.js";
 // Module-local on purpose: no other module reads them (style-registry keeps its
 // own copies at the bottom of that file, because importing them from here would
 // be a cycle - this module imports StyleTable from there).
+
+/**
+ * The grid a worksheet may address.
+ *
+ * These are Excel's own limits. They are enforced on input because a writer that
+ * accepts an impossible coordinate emits a file the consumer has to repair, and
+ * the failure appears on the other side of the wire rather than here.
+ */
+const MAX_ROWS = 1048576;
+const MAX_COLS = 16384;
+
+/** Excel caps a column width at 255 characters; anything larger is clamped. */
+const MAX_COL_WIDTH = 255;
 
 const REL_OFFICE_DOC = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
 const REL_CORE = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
@@ -194,23 +207,75 @@ function normalizeMerges(merges) {
   return out;
 }
 
+/**
+ * Normalise the `columns` option.
+ *
+ * Two spellings are documented and both must work:
+ *
+ *   [{ width: 8 }, { width: 24 }]        positional: entry i is column i
+ *   [{ min: 2, max: 4, width: 20 }]      explicit 0-based span
+ *
+ * The positional form used to be SILENTLY DROPPED, because an entry with no
+ * min/index fell through the index check - so the documented example in COOKBOOK
+ * set two widths and got neither, with no error. An entry that cannot be placed
+ * is now a mistake the caller hears about rather than a no-op.
+ */
 function normalizeColumns(columns) {
   if (columns === undefined || columns === null) return [];
   const out = [];
-  const push = (c) => {
+  const push = (c, position) => {
     if (c === undefined || c === null) return;
-    if (typeof c === "number") { out.push({ min: c, max: c }); return; }
-    const start = c.min !== undefined ? c.min : c.index;
-    if (start === undefined) return;
+    if (typeof c === "number") {
+      if (!Number.isInteger(c) || c < 0 || c >= MAX_COLS) {
+        throw new GridxcelError(
+          "column index " + c + " is outside the sheet (0.." + (MAX_COLS - 1) + ")",
+          "RANGE_TOO_LARGE", { column: c });
+      }
+      out.push({ min: c, max: c });
+      return;
+    }
+    // Explicit index, else the entry's own position in the array.
+    const start = c.min !== undefined ? c.min : (c.index !== undefined ? c.index : position);
+    if (start === undefined) {
+      // Silently dropping the entry means a caller sets a width and gets a
+      // default column with no signal. An entry with nothing to act on is a
+      // mistake worth naming.
+      throw new GridxcelError(
+        "a column option has no min/index, so it does not say which column it applies to",
+        "BAD_VALUE", { column: c });
+    }
     const min = start;
     const max = c.max !== undefined ? c.max : start;
+    let width = c.width;
+    if (width !== undefined && width !== null) {
+      // A width must be a finite, positive number of characters. NaN and
+      // Infinity are unrepresentable in the attribute and a negative width is
+      // meaningless; silently emitting nothing left the caller with a default
+      // column and no sign that the request was ignored.
+      const n = Number(width);
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new GridxcelError(
+          "column " + (typeof c.min === "number" ? c.min + 1 : "?") + " has width " + String(width) +
+            "; a column width must be a finite positive number of characters",
+          "BAD_VALUE", { width });
+      }
+      width = Math.min(n, MAX_COL_WIDTH);
+    }
+    // A column index must address the sheet, not past its edge.
+    const lo = Math.min(min, max);
+    const hi = Math.max(min, max);
+    if (!Number.isInteger(lo) || !Number.isInteger(hi) || lo < 0 || hi >= MAX_COLS) {
+      throw new GridxcelError(
+        "column range " + lo + ".." + hi + " is outside the sheet (0.." + (MAX_COLS - 1) + ")",
+        "RANGE_TOO_LARGE", { min: lo, max: hi });
+    }
     out.push({
-      min: Math.min(min, max), max: Math.max(min, max), width: c.width, hidden: c.hidden,
+      min: lo, max: hi, width, hidden: c.hidden,
       outlineLevel: c.outlineLevel, style: c.style, bestFit: c.bestFit, customWidth: c.customWidth,
     });
   };
-  if (Array.isArray(columns)) columns.forEach(push);
-  else if (typeof columns === "object") push(columns);
+  if (Array.isArray(columns)) columns.forEach((c, i) => push(c, i));
+  else if (typeof columns === "object") push(columns, undefined);
   return out;
 }
 
@@ -226,11 +291,41 @@ function toRowInfoMap(rowInfo) {
   return out;
 }
 
+/**
+ * Autofilter: `true` means "the used range", a string must be a real A1 range.
+ *
+ * The ref was previously written through verbatim, so `autoFilter: "not a range"`
+ * produced `<autoFilter ref="not a range"/>` - invalid XML that Excel repairs.
+ */
+function normalizeAutoFilter(value) {
+  if (value === undefined || value === null || value === false) return null;
+  if (value === true) return true;
+  const text = String(value);
+  try {
+    // decodeRange returns { s, e } (start and end cells), not a bounds object.
+    const range = decodeRange(text);
+    return encodeRange(range.s, range.e);
+  } catch {
+    throw new GridxcelError(
+      "autoFilter " + JSON.stringify(text) + " is not a valid A1 range (expected something like \"A1:D10\")",
+      "BAD_RANGE", { autoFilter: text });
+  }
+}
+
 function normalizeFreeze(freeze) {
   if (!freeze) return null;
   const row = freeze.row | 0;
   const col = freeze.col | 0;
   if (row <= 0 && col <= 0) return null;
+  // The pane's topLeftCell is derived from these, so an absurd split emitted a
+  // cell reference past the end of the grid ("CFDGSXM1000000001") and produced a
+  // file Excel would repair. Refuse instead.
+  if (row >= MAX_ROWS || col >= MAX_COLS) {
+    throw new GridxcelError(
+      "freeze pane at row " + row + ", column " + col + " is outside the sheet (max " +
+        MAX_ROWS + " x " + MAX_COLS + ")",
+      "RANGE_TOO_LARGE", { row, col });
+  }
   return { row: Math.max(0, row), col: Math.max(0, col) };
 }
 
@@ -297,7 +392,7 @@ export class SheetWriter {
     this._columns = normalizeColumns(opts.columns);
     this._rowInfo = toRowInfoMap(opts.rowInfo);
     this._freeze = normalizeFreeze(opts.freeze);
-    this._autoFilter = opts.autoFilter === true ? true : (opts.autoFilter ? String(opts.autoFilter) : null);
+    this._autoFilter = normalizeAutoFilter(opts.autoFilter);
     this._tabColor = opts.tabColor === undefined || opts.tabColor === null ? null : normalizeColor(opts.tabColor);
     this._hidden = opts.hidden === true;
     this._hyperlinks = normalizeHyperlinks(opts.hyperlinks);
