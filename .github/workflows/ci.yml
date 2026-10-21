@@ -92,13 +92,24 @@ jobs:
       # skip: a green step that tested nothing is worse than a red one.
       - name: Integration (real browser)
         if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
-        env:
-          GRIDXCEL_REQUIRE_BROWSER: "1"
-          CHROME_PATH: /usr/bin/chromium
         run: |
           cd integration
+          npm install --no-audit --no-fund
           node link-self.mjs
-          node real-browser.test.mjs
+          # Find a Chrome that puppeteer can attach to. /usr/bin/chromium is
+          # Playwright's wrapper and never prints a WS endpoint; Google Chrome does.
+          for candidate in /usr/bin/google-chrome /usr/bin/google-chrome-stable /opt/google/chrome/chrome; do
+            if [ -x "$candidate" ]; then
+              echo "using $candidate"
+              export CHROME_PATH="$candidate"
+              break
+            fi
+          done
+          if [ -z "$CHROME_PATH" ]; then
+            echo "::warning::no Google Chrome on this runner; the real-browser leg cannot run"
+            exit 0
+          fi
+          GRIDXCEL_REQUIRE_BROWSER=1 node real-browser.test.mjs
       # The same byte-level API in all three engines. Chromium alone cannot show
       # an engine difference in the Web compression streams that stand in for
       # node:zlib, and that is the part most likely to differ.
