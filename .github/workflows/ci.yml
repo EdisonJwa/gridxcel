@@ -68,9 +68,9 @@ jobs:
       # browser is not at a path we can rely on, so install a known-good one and
       # let it report where. `--with-deps` pulls the shared libraries headless
       # Chrome needs, which a bare runner does not always have.
-      - name: Install a browser for the integration leg
+      - name: Install browsers for the integration leg
         if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
-        run: npx --yes playwright@1.49.0 install --with-deps chromium
+        run: npx --yes playwright@1.49.0 install --with-deps chromium firefox webkit
       # GRIDXCEL_REQUIRE_BROWSER makes a missing browser a FAILURE rather than a
       # skip: a green step that tested nothing is worse than a red one.
       - name: Integration (real browser)
@@ -83,6 +83,20 @@ jobs:
           npm install --no-audit --no-fund
           node link-self.mjs
           node real-browser.test.mjs
+      # The same byte-level API in all three engines. Chromium alone cannot show
+      # an engine difference in the Web compression streams that stand in for
+      # node:zlib, and that is the part most likely to differ.
+      - name: Integration (chromium, firefox, webkit)
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
+        env:
+          GRIDXCEL_REQUIRE_BROWSER: "1"
+        run: |
+          cd integration
+          npm install --no-audit --no-fund
+          node link-self.mjs
+          node cross-browser.test.mjs
+          GRIDXCEL_BROWSER_ENGINE=firefox node cross-browser.test.mjs
+          GRIDXCEL_BROWSER_ENGINE=webkit node cross-browser.test.mjs
       # The full harness on the leg that has python: it diffs every fixture in
       # both directions, which the node:test copy only partly mirrors.
       - name: Interop harness

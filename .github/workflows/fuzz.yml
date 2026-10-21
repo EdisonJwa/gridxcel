@@ -1,0 +1,46 @@
+name: Nightly fuzz
+
+# The suites in test/ use a FIXED corpus: every case is one somebody thought of.
+# This workflow runs the same parsers against random input for a long time,
+# because the defects that mattered most in this project - the sparse row index,
+# the number-format crash, the SYLK coordinate bomb - were all found by an
+# adversary, not by a fixture. A fixed corpus cannot find the next one.
+#
+# A failing seed is printed in the log, so any failure reproduces exactly:
+#   node scripts/fuzz-random.mjs --seed <n> --seconds 60
+
+on:
+  schedule:
+    # 03:17 UTC daily. Not on the hour: everyone schedules on the hour, and a
+    # runner queue at 03:00 says nothing about this project.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Seconds per parser"
+        required: false
+        default: "60"
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["18", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Random fuzz
+        env:
+          GRIDXCEL_FUZZ_SECONDS: ${{ github.event.inputs.seconds || '60' }}
+        run: node scripts/fuzz-random.mjs
+      - name: Python oracle
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install openpyxl lxml XlsxWriter
+      - name: Interop
+        run: npm run interop
