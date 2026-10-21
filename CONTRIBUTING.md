@@ -97,6 +97,22 @@ that no tag in the repository points at.
 Use gh workflow run release.yml with the dry-run input for a rehearsal: it builds and
 verifies without publishing.
 
+### Choosing the version
+
+An npm version is immutable. Publishing 0.1.0 freezes this API surface
+permanently - it can be deprecated, never corrected. Two honest choices:
+
+| Version | npm dist-tag | When |
+| --- | --- | --- |
+| `0.1.0` | the default tag | The surface is settled and you will support it. |
+| `0.1.0-rc.1` | the next tag | You want the artifact in front of people while keeping room to change. npm assigns that tag to a prerelease automatically. |
+
+A prerelease reserves nothing permanently and is not offered to a plain install
+by default; users opt in by naming the tag. Given that this
+project's API grew three ways during the 0.1.0 build (`createCSVStream`,
+`gridxcel/formats`, and the corrected type declarations), a prerelease is the
+lower-regret choice unless the surface is genuinely final.
+
 ## Fixtures and the Python oracle
 
 - Fixtures live in `test/fixtures/`. Most are written by Python rather than by
