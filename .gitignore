@@ -36,3 +36,4 @@ Thumbs.db
 *.swp
 integration/cross-browser-entry.mjs
 out*.txt
+test-run-output.log
