@@ -9,6 +9,21 @@ All notable changes to gridxcel are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **A release workflow with provenance, and a local pre-flight.**`.github/workflows/release.yml`
+  publishes from CI on a `v*` tag, which is the only way to get npm provenance -
+  the attestation needs an OIDC token only a supported provider can issue, so a
+  laptop publish is an unattested publish. It refuses to publish when the tag and
+  `package.json` disagree, runs the full gate plus the Python oracle on a clean
+  checkout first, and records the tarball URL and integrity digest.
+  `npm run check:release` is the same verification available locally: version
+  unclaimed, tag agrees, tree clean, no dependencies, every exports target
+  present, and the packed tarball installs and resolves every entry point.
+- **A test that reads a workbook written by hand in Excel's OOXML.** Every other
+  fixture comes from this project's writer or from openpyxl, which made the
+  reader's coverage circular. The new one covers phonetic runs, rich-text runs,
+  inline strings, boolean and error cells, cached formula results, a shared-strings
+  table with `uniqueCount`, and Excel's own part layout - none of which the writer
+  emits, so a defect in the writer cannot mask one in the reader.
 - **Random fuzzing in the gate, and a nightly job.** Every suite in `test/` uses a
   fixed corpus, so it can only catch a regression. `scripts/fuzz-random.mjs` drives
   ten parsers with generated input for a time budget under a seed that reproduces

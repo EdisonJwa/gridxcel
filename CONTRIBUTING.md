@@ -23,9 +23,13 @@ Clone the repository and open it. That is the whole setup:
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | The `node:test` suite: unit, integration, interop and robustness. As last measured, 303 tests, 299 pass, 0 fail, 4 skipped; the skips are fixtures the Python oracle refuses to open. |
+| `npm test` | The `node:test` suite: unit, integration, interop and robustness. As last measured, 324 tests, 320 pass, 0 fail, 4 skipped; the skips are fixtures the Python oracle refuses to open. |
 | `npm run check:docs` | Documentation checker: every backticked symbol must exist in `src/`, every local link and anchor must resolve, and every `doc-example` fence is executed. |
 | `npm run interop` | The oracle harness: gridxcel writes and Python openpyxl verifies, then gridxcel reads Python-written fixtures and diffs them. Exit 0 pass, 1 mismatch, 2 nothing proven. |
+| `npm run check:exports` | Every public export appears in a document, and every documented symbol exists. The entry points are derived from `package.json`. |
+| `npm run check:clone` | Runs the documentation checks against a copy of the tracked files only, with no bench directory and no installed dependencies. Catches a doc example that depends on something not in the repository - which is invisible on a developer machine by definition. |
+| `npm run check:fuzz` | Five seconds of generated input across ten parsers, with a fixed seed. `npm run fuzz:long` runs it for two minutes. |
+| `npm run check:release` | The pre-flight for a publish. See [Releasing](#releasing). |
 | `npm run bench:scaling` | The scaling and head-to-head numbers behind [docs/PERFORMANCE.md](docs/PERFORMANCE.md). |
 | `node scripts/check-crc.mjs` | CRC regression check. Exit 1 means corruption was rejected, which is the good outcome; exit 0 means the gap is back. |
 
@@ -58,6 +62,40 @@ The same checker also reads every backticked identifier in the documents it
 covers and requires it to be exported by `src/` or to appear in the source. A
 name that is not API - an environment variable, another tool's option, a CLI
 verb - goes in `scripts/docs-allow.json` or is written without a code span.
+
+## Releasing
+
+A release is the one irreversible action here: an npm version can be deprecated
+but never withdrawn. Two things make it safe.
+
+**`npm run check:release`** runs the pre-flight locally. It refuses when the
+version is not valid semver, when it is already on the registry, when the git tag
+and the manifest disagree, when the tree is dirty, when a dependency has crept
+in, when an exports target does not exist, or when the packed tarball does not
+install and resolve every entry point. That last one is not redundant with the
+test suite: it is the only check that looks at what actually ships.
+
+**`.github/workflows/release.yml`** publishes from CI, triggered by a `v*` tag.
+Publishing from CI is not convenience - it is the only way to get npm provenance,
+because the attestation needs an OIDC token that only a supported provider can
+issue. A laptop publish is an unattested publish.
+
+To cut a release:
+
+```sh
+npm run check:release          # must print "ready to publish"
+git tag v0.1.0
+git push origin v0.1.0         # the workflow publishes
+```
+
+The workflow needs an NPM_TOKEN repository secret. It runs the full gate plus
+the Python oracle on a clean checkout before publishing, and records the tarball
+URL and integrity digest in the run summary. It also refuses to publish when the
+tag and the manifest disagree, because that would put a version on the registry
+that no tag in the repository points at.
+
+Use gh workflow run release.yml with the dry-run input for a rehearsal: it builds and
+verifies without publishing.
 
 ## Fixtures and the Python oracle
 
