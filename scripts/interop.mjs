@@ -127,7 +127,23 @@ export function checkWrittenFile(spec, doc) {
         }
       }
     }
-    notes.push("style records read by openpyxl: " + records.fonts.length + " fonts, " + records.fills.length + " fills, " + records.borders.length + " borders");
+    for (const al of records.alignments) {
+      checks++;
+      // A horizontal or vertical value must be one the schema allows; openpyxl
+      // passes through whatever the file says, including garbage.
+      const H = ["general", "left", "center", "right", "fill", "justify", "centerContinuous", "distributed"];
+      const V = ["top", "center", "bottom", "justify", "distributed"];
+      if (al.horizontal !== null && !H.includes(al.horizontal)) {
+        push({ check: "styles", target: spec.name, field: "alignment.horizontal", expected: H.join("|"), actual: String(al.horizontal) });
+      }
+      if (al.vertical !== null && !V.includes(al.vertical)) {
+        push({ check: "styles", target: spec.name, field: "alignment.vertical", expected: V.join("|"), actual: String(al.vertical) });
+      }
+    }
+    notes.push(
+      "style records read by openpyxl: " + records.fonts.length + " fonts, " + records.fills.length +
+      " fills, " + records.borders.length + " borders, " + records.alignments.length + " alignments",
+    );
   }
 
   if (doc.zip.testzip !== null) {

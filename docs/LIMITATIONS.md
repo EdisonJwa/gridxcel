@@ -79,14 +79,14 @@ distinction matters if you are deciding what to rely on.
 | Area | What is not proven |
 | --- | --- |
 | Rendered display text (`cell.w`) | Format codes are diffed against openpyxl, but openpyxl does not render numbers, so the rendered string has no outside oracle. The common path is exact; exotic codes rest on documented Excel semantics. |
-| Fonts, fills, borders, alignment | Now verified: the interop harness writes styled cells and has openpyxl read the style records back, checking names, sizes, solid-fill colours and border sides. Alignment is not yet compared. |
+| Fonts, fills, borders, alignment | Verified: the interop harness writes a styled spec - bold, italic, underline, strike, named fonts, solid fills, multi-side borders, horizontal/vertical alignment, wrap - and has openpyxl read the records back, checking names, sizes, solid-fill colours, border sides and alignment values. |
 | `gridxcel/compat` write path | Verified: the interop harness now writes the same specs through `compat.write` and has openpyxl inspect the output, so a divergence between the two write paths is a mismatch. |
 | Deliberately corrupt fixtures | openpyxl refuses to open them, so they have no oracle and are skipped in the interop harness. |
 | Fuzzing | Fixed corpora plus a random fuzzer (millions of generated cases per run) prove no untyped throw, no hang and no unbounded allocation. They do not prove that a damaged file yields the correct *subset* of rows - only intact files are checked for content. |
 | Browser | Executed in a sandbox with the Web platform and no `Buffer`/`process`/`require`, and in real Chromium, Firefox and WebKit (Playwright) in CI. Safari itself is approximated by WebKit, not tested directly. |
 
-Evidence: `npm test` runs 324 tests (320 pass, 4 skipped);
-`node scripts/interop.mjs` reports 410 write checks and 37,293 read checks
+Evidence: `npm test` runs 325 tests (321 pass, 4 skipped);
+`node scripts/interop.mjs` reports 532 write checks and 37,293 read checks
 against openpyxl with 0 mismatches; `node scripts/check-crc.mjs` confirms a
 corrupted part is rejected with `CRC_MISMATCH`.
 

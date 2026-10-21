@@ -616,16 +616,28 @@ def style_records(path):
                 side = getattr(border, name, None)
                 sides[name] = getattr(side, "style", None) if side is not None else None
             out["borders"].append(sides)
-        try:
-            for xf in wb._cell_styles if wb._cell_styles else []:
-                al = getattr(xf, "alignment", None)
-                if al is not None:
+        # Alignment is NOT reachable from wb._cell_styles in this openpyxl version -
+        # those xf records report alignment None even when the file has it. It is
+        # reachable from a cell that uses the style, so read it there. Verified:
+        # a written horizontal="center" vertical="top" wrapText="1" shows up on the
+        # cell and nowhere on the xf.
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows():
+                for cell in row:
+                    al = getattr(cell, "alignment", None)
+                    if al is None:
+                        continue
+                    if al.horizontal is None and al.vertical is None and not al.wrapText:
+                        continue
                     key = (al.horizontal, al.vertical, bool(al.wrapText))
-                    if key not in seen_align:
-                        seen_align.add(key)
-                        out["alignments"].append({"horizontal": al.horizontal, "vertical": al.vertical, "wrapText": bool(al.wrapText)})
-        except Exception:
-            pass
+                    if key in seen_align:
+                        continue
+                    seen_align.add(key);
+                    out["alignments"].append({
+                        "horizontal": al.horizontal,
+                        "vertical": al.vertical,
+                        "wrapText": bool(al.wrapText),
+                    })
     except Exception as exc:  # pragma: no cover
         out["error"] = str(exc)
     return out

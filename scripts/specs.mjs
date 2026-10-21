@@ -48,7 +48,7 @@ class Spec {
   }
 
   /** col is 0-based; row is 1-based. Creates sparse rows as needed. */
-  cell(row, col, value, { t, z, f, e } = {}) {
+  cell(row, col, value, { t, z, f, e, s: style } = {}) {
     const s = this._sheet;
     while (s.rows.length < row) s.rows.push([]);
     const line = s.rows[row - 1];
@@ -57,6 +57,7 @@ class Spec {
     if (z !== undefined) cell.z = z;
     if (f !== undefined) cell.f = f;
     if (e !== undefined) cell.e = e;
+    if (style !== undefined) cell.s = style;
     line[col] = cell;
     const ref = colName(col) + row;
     const exp = { ref, kind: cell.t, format: z === undefined ? "General" : String(z) };
@@ -189,6 +190,31 @@ export function writeSpecs() {
     s.cell(4, 0, 0, { t: "number", f: "SUM(A1:A3)" });
     s.cell(5, 0, "a", { t: "string" });
     s.cell(6, 0, "a1", { t: "string", f: 'CONCATENATE(A5,"1")' });
+    specs.push(s.build());
+  }
+
+  // 4. Cell styles: fonts, fills, borders, alignment.
+  //
+  // These records were only ever read back by gridxcel's own reader, so a write
+  // that dropped <b/> or a fill colour round-tripped perfectly. openpyxl parses
+  // the same styles.xml, so this spec puts every attribute we can emit in front of
+  // an independent implementation.
+  {
+    const s = new Spec("styles", [
+      "openpyxl reads fonts, fills, borders and alignment from the styles.xml we write.",
+      "Alignment is only visible on a cell that uses the style, not on the xf record.",
+    ]);
+    s.sheet("Styled");
+    s.cell(1, 0, 1, { t: "number", s: { font: { b: true, sz: 14, color: "#FF0000" } } });
+    s.cell(2, 0, 2, { t: "number", s: { font: { i: true } } });
+    s.cell(3, 0, 3, { t: "number", s: { font: { u: true } } });
+    s.cell(4, 0, 4, { t: "number", s: { font: { strike: true } } });
+    s.cell(5, 0, 5, { t: "number", s: { font: { name: "Arial", sz: 9 } } });
+    s.cell(6, 0, 6, { t: "number", s: { fill: { pattern: "solid", fgColor: "#FFFF00" } } });
+    s.cell(7, 0, 7, { t: "number", s: { border: { top: { style: "thin" }, bottom: { style: "double" } } } });
+    s.cell(8, 0, 8, { t: "number", s: { alignment: { horizontal: "center", vertical: "top", wrapText: true } } });
+    s.cell(9, 0, 9, { t: "number", s: { alignment: { horizontal: "right" } } });
+    s.cell(10, 0, "styled text", { t: "string", s: { font: { b: true, i: true } } });
     specs.push(s.build());
   }
 
