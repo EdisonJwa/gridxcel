@@ -85,7 +85,7 @@ distinction matters if you are deciding what to rely on.
 | Fuzzing | Fixed corpora plus a random fuzzer (millions of generated cases per run) prove no untyped throw, no hang and no unbounded allocation. They do not prove that a damaged file yields the correct *subset* of rows - only intact files are checked for content. |
 | Browser | Executed in a sandbox with the Web platform and no `Buffer`/`process`/`require`, and in real Chromium, Firefox and WebKit (Playwright) in CI. Safari itself is approximated by WebKit, not tested directly. |
 
-Evidence: `npm test` runs 303 tests (299 pass, 4 skipped);
+Evidence: `npm test` runs 324 tests (320 pass, 4 skipped);
 `node scripts/interop.mjs` reports 190 write checks and 37,293 read checks
 against openpyxl with 0 mismatches; `node scripts/check-crc.mjs` confirms a
 corrupted part is rejected with `CRC_MISMATCH`.

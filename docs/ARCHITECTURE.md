@@ -311,7 +311,7 @@ mechanical check.
 
 | Check | Command | What it proves |
 | --- | --- | --- |
-| Unit and integration tests | `npm test` | 303 tests: 299 pass, 4 skipped, 0 fail. |
+| Unit and integration tests | `npm test` | 324 tests: 320 pass, 4 skipped, 0 fail. |
 | Documentation | `npm run check:docs` | Every documented symbol exists in `src/`, every doc example runs as a real ES module, every link resolves. |
 | Inverse coverage | `node scripts/check-exports-doc.mjs` | Every public export across the eight entry points is named in the documentation. |
 | Oracle interop | `node scripts/interop.mjs` | `status=pass`, 190 write checks, 37,293 read checks, 0 mismatches, `dateConvention=local`, against Python openpyxl 3.1.5 and XlsxWriter 3.2.9. |
