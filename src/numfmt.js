@@ -183,6 +183,36 @@ function padStr(s, width, ch = "0") {
   return s.length >= width ? s : ch.repeat(width - s.length) + s;
 }
 
+/**
+ * The largest denominator a "# ?/?" code may ask for.
+ *
+ * Excel renders a fraction to at most three denominator digits, and a code that
+ * asks for more is meaningless - but `maxDen` was derived as 10^len - 1 straight
+ * from the format string, so "# ?/?????????" in a workbook's styles.xml drove a
+ * one-billion-iteration loop. A format code is file content, which means it is
+ * attacker-controlled. 999 is both the Excel behaviour and a bounded loop.
+ */
+const MAX_FRACTION_DEN = 999;
+
+/**
+ * The most decimal places a format code may ask for.
+ *
+ * Excel renders at most 30; `Number.prototype.toFixed` accepts at most 100 and
+ * throws a RangeError beyond it. The number is read from the format string, which
+ * is file content, so it is clamped rather than trusted.
+ */
+const MAX_DECIMALS = 30;
+
+/**
+ * The longest format code that can produce a renderable value.
+ *
+ * Excel caps a cell at 32,767 characters, so a longer code cannot describe
+ * anything a spreadsheet could display - it is a way to make formatting cost
+ * seconds per cell. Refused rather than truncated, because a silently wrong
+ * format is worse than a typed error.
+ */
+const MAX_FORMAT_LENGTH = 32767;
+
 /** Fraction approximation for "# ?/?" style codes. */
 function bestFraction(value, maxDen) {
   const sign = value < 0 ? -1 : 1;
@@ -230,6 +260,15 @@ export function splitSections(code) {
 export function formatNumber(value, code, opts = {}) {
   if (code === undefined || code === null || code === "General" || code === 0) return generalNumber(value);
   const codes = typeof code === "number" ? (BUILTIN_FORMATS[code] || "General") : code;
+  // A format code is file content. A rendered value is at most one cell, and
+  // Excel's cell limit is 32,767 characters - so a longer code cannot describe a
+  // renderable format, and honouring it costs seconds per cell. Refuse instead.
+  if (typeof codes === "string" && codes.length > MAX_FORMAT_LENGTH) {
+    throw new GridxcelError(
+      "number format code is " + codes.length + " characters, beyond the " + MAX_FORMAT_LENGTH +
+        " that could render inside one cell",
+      "BAD_FORMAT", { length: codes.length });
+  }
   if (codes === "General") return generalNumber(value);
   const sections = splitSections(codes);
   const idx = pickSection(sections, value, false);
@@ -256,14 +295,25 @@ export function formatNumber(value, code, opts = {}) {
   const fracMatch = code2.match(/([#0?]+)\s+([#0?]+)\/([#0?]+|[0-9]+)/);
   if (fracMatch) return formatFraction(scaled, code2, fracMatch);
 
-  // Literal text extraction
-  let literals = [];
-  let body = code2.replace(/"([^"]*)"/g, (m, g) => { literals.push(g); return "\u0000" + (literals.length - 1) + "\u0000"; });
+  // Directives are resolved on the RAW code, in Excel's own precedence order,
+  // BEFORE any literal marker exists:
+  //   1. a backslash escapes the next character,
+  //   2. a quoted run is literal text,
+  //   3. "_x" reserves the width of x, "*x" fills with x.
+  // Doing 3 after marker insertion let it consume half of a marker and leave a
+  // lone NUL, which the render loop then walked forever.
+  code2 = code2.replace(/\\(.)/g, "\u0003$1\u0003");
+  let body = code2
+    .replace(/_.?/g, "\u0001")
+    .replace(/\*./g, "")
+    .replace(/\u0001/g, " ")
+    .replace(/\u0003/g, "");
+
+  // Literal text extraction: quoted runs first, then escaped characters, both of
+  // which can also arrive via the \u0003 protection above.
+  const literals = [];
+  body = body.replace(/"([^"]*)"/g, (m, g) => { literals.push(g); return "\u0000" + (literals.length - 1) + "\u0000"; });
   body = body.replace(/\\(.)/g, (m, c) => { literals.push(c); return "\u0000" + (literals.length - 1) + "\u0000"; });
-  // Underscore = reserve the width of the next char; asterisk = fill (treated as blank).
-  body = body.replace(/_.?/g, "\u0001");
-  body = body.replace(/\*./g, "");
-  body = body.replace(/\u0001/g, " ");
   // Padding around a fraction is part of the fraction token, not a literal,
   // so hide it from the placeholder walker (NBSP is not a number placeholder).
   body = body.replace(/ +(?=\S*\/)/g, (m) => "\u00a0".repeat(m.length));
@@ -275,7 +325,11 @@ export function formatNumber(value, code, opts = {}) {
   const useGrouping = intPart.includes(",") && /[#0]/.test(intPart.split(",").join(""));
   const obligatoryInt = (intPart.match(/0/g) || []).length;
   const minFrac = (decPart.match(/0/g) || []).length;
-  const maxFrac = decPart.length;
+  // The decimal-place count comes from the file, so it is unbounded input. Excel
+  // renders at most 30 places, toFixed accepts at most 100, and the padding loop
+  // below is linear in this number - so a 100,000-digit code meant 10^9 character
+  // writes and a RangeError from toFixed that was not a GridxcelError.
+  const maxFrac = Math.min(decPart.length, MAX_DECIMALS);
 
   const abs = Math.abs(scaled);
   let numStr;
@@ -315,6 +369,14 @@ export function formatNumber(value, code, opts = {}) {
     const ch = body[i];
     if (ch === "\u0000") {
       const end = body.indexOf("\u0000", i + 1);
+      if (end < 0) {
+        // An unpaired marker. "*." and "_." are stripped AFTER the literals are
+        // replaced, so they can consume half of a marker and leave a lone NUL
+        // behind. Setting i = -1 here used to rewind the loop onto the same
+        // character forever, growing the output until the process aborted.
+        // Skip it instead: a broken marker contributes nothing.
+        continue;
+      }
       const li = parseInt(body.slice(i + 1, end), 10);
       out += literals[li] === undefined ? "" : literals[li];
       i = end;
@@ -482,10 +544,12 @@ export function generalNumber(v) {
 function formatScientific(v, code) {
   const m = code.match(/([#0?]+)(?:\.([#0?]+))?[eE]([+-]?)(0+)/);
   if (!m) return generalNumber(v);
-  const intLen = m[1].length;
-  const decLen = m[2] ? m[2].length : 0;
+  // Bounded for the same reason as formatNumber: these come from the code, and
+  // toFixed throws a raw RangeError past 100.
+  const intLen = Math.min(m[1].length, MAX_DECIMALS);
+  const decLen = Math.min(m[2] ? m[2].length : 0, MAX_DECIMALS);
   const forceSign = m[3] === "+";
-  const expDigits = m[4].length;
+  const expDigits = Math.min(m[4].length, MAX_DECIMALS);
   if (v === 0) {
     return pad(0, intLen) + (decLen ? "." + "0".repeat(decLen) : "") + "E" + (forceSign ? "+" : "") + pad(0, expDigits);
   }
@@ -503,7 +567,9 @@ function formatFraction(v, code, m) {
   const numFmt = m[2];
   const denFmt = m[3];
   const fixedDen = /^[0-9]+$/.test(denFmt) ? parseInt(denFmt, 10) : 0;
-  const maxDen = fixedDen || Math.pow(10, denFmt.length) - 1;
+  // Cap the search: the denominator width comes from the file, and an unbounded
+  // 10^len loop is a denial of service, not a fraction.
+  const maxDen = fixedDen || Math.min(Math.pow(10, Math.min(denFmt.length, 3)) - 1, MAX_FRACTION_DEN);
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
   const whole = Math.floor(abs);

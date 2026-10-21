@@ -185,10 +185,18 @@ test("HIGH-1: a long text node does not accumulate quadratically", async () => {
     return dt;
   };
 
-  // Best of three: this suite runs in parallel with everything else, and a
-  // single sample taken during a load spike made this assertion flaky.
-  const small = await bestOf(3, () => time(2));
-  const large = await bestOf(3, () => time(8));
+  // The RATIO is what matters, and it is sensitive to the small sample: one slow
+  // reading of the 2 MB case inflates it even when both are in fact linear. Five
+  // samples per size, interleaved so a load spike cannot land only on the small
+  // one, and the minimum of each taken. This suite runs in parallel with the rest.
+  const smalls = [];
+  const larges = [];
+  for (let i = 0; i < 5; i++) {
+    smalls.push(await time(2));
+    larges.push(await time(8));
+  }
+  const small = Math.min(...smalls);
+  const large = Math.min(...larges);
 
   // Four times the data must not cost sixteen times the time. A linear scanner
   // lands near 4x; the quadratic one was above 15x.
