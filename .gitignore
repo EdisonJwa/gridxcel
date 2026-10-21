@@ -34,3 +34,5 @@ test/crcbench.mjs
 .DS_Store
 Thumbs.db
 *.swp
+integration/cross-browser-entry.mjs
+out*.txt
