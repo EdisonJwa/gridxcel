@@ -91,6 +91,45 @@ export function checkWrittenFile(spec, doc) {
   let dateConvention = null;
   const push = (m) => mismatches.push(m);
 
+  // Style records, read back by openpyxl.
+  //
+  // Fonts, fills and borders were only ever checked by our own reader, so a write
+  // that dropped <b/> or a fill colour would round-trip cleanly and still be wrong
+  // for every other implementation. openpyxl parses the same styles.xml, so a
+  // record it cannot read, or reads with different attributes, is a real defect.
+  const records = doc.book && doc.book.styleRecords;
+  checks++;
+  if (!records || records.error) {
+    push({ check: "styles", target: spec.name, field: "styleRecords", expected: "readable", actual: records ? records.error : "absent" });
+  } else {
+    for (const font of records.fonts) {
+      checks++;
+      if (typeof font.name !== "string" || !font.name) {
+        push({ check: "styles", target: spec.name, field: "font.name", expected: "a name", actual: String(font.name) });
+      }
+      if (font.size !== null && !(font.size > 0)) {
+        push({ check: "styles", target: spec.name, field: "font.size", expected: "positive", actual: String(font.size) });
+      }
+    }
+    for (const fill of records.fills) {
+      checks++;
+      // A solid fill with no colour renders as black in Excel, which is never what
+      // a caller asked for.
+      if (fill.patternType === "solid" && (!fill.fgColor || fill.fgColor === "00000000")) {
+        push({ check: "styles", target: spec.name, field: "fill.fgColor", expected: "a colour for a solid fill", actual: String(fill.fgColor) });
+      }
+    }
+    for (const border of records.borders) {
+      checks++;
+      for (const [side, style] of Object.entries(border)) {
+        if (style !== null && typeof style !== "string") {
+          push({ check: "styles", target: spec.name, field: "border." + side, expected: "a style name", actual: String(style) });
+        }
+      }
+    }
+    notes.push("style records read by openpyxl: " + records.fonts.length + " fonts, " + records.fills.length + " fills, " + records.borders.length + " borders");
+  }
+
   if (doc.zip.testzip !== null) {
     push({ check: "zip", target: spec.name, field: "testzip", expected: null, actual: doc.zip.testzip, detail: "zipfile.testzip() reported a bad entry" });
   }

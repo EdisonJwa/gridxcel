@@ -574,9 +574,61 @@ def inspect(path, cached=False, read_only=False, use_xml=True):
             "sheetNames": list(wb.sheetnames),
             "definedNames": defined,
             "stylesError": styles["error"],
+            "styleRecords": style_records(path),
         },
         "sheets": sheets,
     }
+
+
+def style_records(path):
+    """Fonts, fills, borders and alignments, as openpyxl reads them.
+
+    The writer emits these records and our own reader round-trips them, but no
+    outside implementation had ever looked at what we produce. openpyxl parses the
+    same styles.xml, so dumping its view and diffing against what was written is a
+    genuine cross-check.
+    """
+    out = {"fonts": [], "fills": [], "borders": [], "alignments": [], "error": None}
+    try:
+        import openpyxl
+
+        wb = openpyxl.load_workbook(path)
+        seen_align = set()
+        for font in (wb._fonts or []):
+            out["fonts"].append({
+                "name": font.name,
+                "size": float(font.sz) if font.sz is not None else None,
+                "bold": bool(font.b),
+                "italic": bool(font.i),
+                "underline": font.u if isinstance(font.u, str) else bool(font.u),
+            })
+        for fill in wb._fills if wb._fills else []:
+            fg = None
+            try:
+                if fill.fgColor is not None and fill.fgColor.rgb:
+                    fg = fill.fgColor.rgb
+            except Exception:
+                fg = None
+            out["fills"].append({"patternType": fill.patternType, "fgColor": fg})
+        for border in wb._borders if wb._borders else []:
+            sides = {}
+            for name in ("left", "right", "top", "bottom"):
+                side = getattr(border, name, None)
+                sides[name] = getattr(side, "style", None) if side is not None else None
+            out["borders"].append(sides)
+        try:
+            for xf in wb._cell_styles if wb._cell_styles else []:
+                al = getattr(xf, "alignment", None)
+                if al is not None:
+                    key = (al.horizontal, al.vertical, bool(al.wrapText))
+                    if key not in seen_align:
+                        seen_align.add(key)
+                        out["alignments"].append({"horizontal": al.horizontal, "vertical": al.vertical, "wrapText": bool(al.wrapText)})
+        except Exception:
+            pass
+    except Exception as exc:  # pragma: no cover
+        out["error"] = str(exc)
+    return out
 
 
 def sha256(path):
