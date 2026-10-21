@@ -19,13 +19,25 @@ import path from "node:path";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FIX = process.argv.includes("--fix");
 
-const out = execFileSync(process.execPath, [path.join(ROOT, "scripts", "run-tests.mjs")], {
-  cwd: ROOT, encoding: "utf8", maxBuffer: 1 << 26,
-});
+let out = "";
+let runError = null;
+try {
+  out = execFileSync(process.execPath, [path.join(ROOT, "scripts", "run-tests.mjs")], {
+    cwd: ROOT, encoding: "utf8", maxBuffer: 1 << 26, stdio: ["ignore", "pipe", "pipe"],
+  });
+} catch (err) {
+  runError = err;
+  out = (err && (err.stdout || "")) || "";
+  console.error("the test runner exited with status " + (err && err.status) + ": " + String((err && err.stderr) || (err && err.message) || err).split("\n").slice(-4).join(" | "));
+}
 const counts = {};
 for (const m of out.matchAll(/ℹ (tests|pass|fail|skipped) (\d+)/g)) counts[m[1]] = Number(m[2]);
 if (!counts.tests) {
   console.error("FAIL  the test runner reported no counts; cannot verify the documents");
+  console.error("       captured " + out.length + " chars from the runner");
+  if (runError) console.error("       runner error: " + String(runError.message || runError).split("\n")[0]);
+  const tail = out.trim().split("\n").slice(-6).join("\n       ");
+  if (tail) console.error("       last output:\n       " + tail);
   process.exit(1);
 }
 console.log("suite reports: " + counts.tests + " tests, " + counts.pass + " pass, " + counts.fail + " fail, " + counts.skipped + " skipped");
