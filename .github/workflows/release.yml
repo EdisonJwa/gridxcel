@@ -1,0 +1,91 @@
+name: Release
+
+# Publishing from CI rather than a laptop, for three reasons that are all about the
+# artifact rather than convenience:
+#
+#   1. npm provenance needs an OIDC token from a supported CI provider. A local
+#      publish cannot produce it, so a laptop release is an unattested release.
+#   2. The gate runs on a clean checkout. A local publish runs it on a machine that
+#      has untracked fixtures, which is exactly how a doc example that read
+#      bench/fair-50000x8.xlsx went green locally and failed all eight CI legs.
+#   3. The credential is a repository secret, never a file on someone's disk.
+#
+# Triggered by a tag, not by a push to main: the tag is the release decision, and
+# npm versions are immutable, so the decision should be deliberate and recorded.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify only, do not publish"
+        type: boolean
+        default: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for provenance: the OIDC token is what npm uses to sign the
+      # attestation that this tarball was built from this commit in this workflow.
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # full history, so the provenance attestation can name the exact commit
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      # The tag and the manifest must agree. Publishing 0.1.0 from a v0.2.0 tag
+      # would put a version on the registry that no tag in the repository points
+      # at, and npm versions cannot be withdrawn.
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          node -e '
+            const want = process.env.GITHUB_REF_NAME.replace(/^v/, "");
+            const have = require("./package.json").version;
+            if (want !== have) {
+              console.error("tag is v" + want + " but package.json says " + have);
+              process.exit(1);
+            }
+            console.log("tag and package.json agree on " + have);
+          '
+
+      - name: Install the Python oracle
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install openpyxl lxml XlsxWriter
+
+      # prepublishOnly runs this again, but failing here means the log says which
+      # gate failed rather than one line of npm output.
+      - name: Full gate
+        run: npm run check && npm run interop
+
+      - name: Publish
+        if: github.event_name == 'push' || inputs.dry_run == false
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Dry run
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run != false
+        run: npm publish --provenance --access public --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Record what was published
+        if: github.event_name == 'push'
+        run: |
+          echo "### Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          npm view "$(node -p 'require("./package.json").name')@$(node -p 'require("./package.json").version')" dist.tarball dist.integrity --json >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
