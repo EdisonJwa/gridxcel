@@ -163,7 +163,7 @@ try {
       "const out = { sheets: book.sheetNames.length, aoa: aoa.length, streamed: n, formatted: formatNumber(1200, \"#,##0\"), csv: csv.trim().split(/\\r?\\n/)[0] };",
       "if (out.sheets !== 1 || out.aoa !== 1 || out.streamed !== 1) { console.error(JSON.stringify(out)); process.exit(1); }",
       "if (out.formatted !== \"1,200\") { console.error(\"formatNumber: \" + out.formatted); process.exit(1); }",
-      "if (out.csv !== \"a,units\" && out.csv !== \"a,1,200\") { console.error(\"csv: \" + out.csv); process.exit(1); }",
+      "if (!/^a,(units|\"1,200\")$/.test(out.csv)) { console.error(\"csv: \" + out.csv); process.exit(1); }",
       "console.log(JSON.stringify(out));",
     ].join("\n"),
   );
