@@ -434,10 +434,25 @@ export class SheetWriter {
       // Bounds and A1 refs are 0-based (address.js convention); only the row
       // element's r attribute is 1-based.
       const r0 = r - 1;
+      // A row is a sparse array, so its length is whatever the caller set: writing
+      // to index 2^31-1 makes length 2^31 and the naive loop walks two billion
+      // holes (38 s for one row). Bound it to the sheet first, on the index the
+      // caller actually used, and report the real problem rather than hanging.
+      if (cells.length > MAX_COLS) {
+        throw new GridxcelError(
+          "row " + r + " has length " + cells.length + ", beyond the " + MAX_COLS +
+            " columns a worksheet can address",
+          "RANGE_TOO_LARGE", { row: r, length: cells.length, columns: MAX_COLS });
+      }
       for (let j = 0; j < cells.length; j++) {
         const cell = cells[j];
         if (cell === undefined || cell === null) continue;
         const col = base + j;
+        if (col >= MAX_COLS) {
+          throw new GridxcelError(
+            "cell at row " + r + ", column index " + j + " is outside the worksheet (" + MAX_COLS + " columns)",
+            "RANGE_TOO_LARGE", { row: r, column: j });
+        }
         const xml = this._cellXml(cell, r0, col);
         if (xml === null) continue;
         if (parts === null) parts = [];

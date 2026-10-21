@@ -261,3 +261,46 @@ test("writer: a bad colour is still refused", () => {
     assert.throws(() => writeSheetWithStyle({ font: { color } }), (e) => e.code === "BAD_STYLE", JSON.stringify(color));
   }
 });
+
+/* --------------------------------------------- sparse row length (found by fuzz) */
+
+test("writer: a sparse row index beyond the sheet is refused, not walked", () => {
+  // A row is a sparse array, so its length is whatever the caller set. Writing to
+  // index 2^31-1 made length 2^31 and the naive loop walked two billion holes:
+  // 38 seconds for one row, then it emitted a column reference Excel cannot read.
+  // Same class as the SYLK/DIF coordinate bomb - bounded on the way in.
+  const row = [];
+  row[2 ** 31 - 1] = { t: "number", v: 1 };
+  const started = Date.now();
+  assert.throws(
+    () => writeWorkbookSync({ sheetNames: ["S"], sheets: [sheetWith({ rows: [row], rowCount: 1 })] }),
+    (e) => e.code === "RANGE_TOO_LARGE" && /columns a worksheet can address/.test(e.message),
+  );
+  assert.ok(Date.now() - started < 1000, "must refuse immediately, not scan");
+
+  const row2 = [];
+  row2[1e9] = { t: "number", v: 1 };
+  assert.throws(
+    () => writeWorkbookSync({ sheetNames: ["S"], sheets: [sheetWith({ rows: [row2], rowCount: 1 })] }),
+    (e) => e.code === "RANGE_TOO_LARGE",
+  );
+});
+
+test("writer: the last legal column index still works", () => {
+  // 16383 is the highest 0-based column; the bound must not reject it.
+  const row = [];
+  row[16383] = { t: "string", v: "last" };
+  const bytes = writeWorkbookSync({ sheetNames: ["S"], sheets: [sheetWith({ rows: [row], rowCount: 1 })] });
+  const back = readWorkbookSync(bytes);
+  assert.strictEqual(back.sheets[0].columnCount, 16384);
+});
+
+test("writer: an ordinary sparse row is unaffected by the bound", () => {
+  const row = [];
+  row[0] = { t: "number", v: 1 };
+  row[25] = { t: "number", v: 2 };   // columns A and Z, 26 entries
+  const bytes = writeWorkbookSync({ sheetNames: ["S"], sheets: [sheetWith({ rows: [row], rowCount: 1 })] });
+  const back = readWorkbookSync(bytes);
+  assert.strictEqual(back.sheets[0].columnCount, 26);
+  assert.strictEqual(back.sheets[0].rows[0][25].v, 2);
+});
