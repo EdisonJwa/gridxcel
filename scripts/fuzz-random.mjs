@@ -26,6 +26,10 @@ import { difToSheet, sheetToDIF } from "../src/dif.js";
 import { splitSections, pickSection } from "../src/numfmt.js";
 import { decodeRange, encodeCell, decodeCell } from "../src/address.js";
 import { GridxcelError } from "../src/errors.js";
+import { storedZip } from "./zip-surgery.mjs";
+import { ZipArchive } from "../src/zip.js";
+import { readWorkbookSync } from "../src/read.js";
+import { writeWorkbookSync } from "../src/write.js";
 
 /* --------------------------------------------------------------- arguments */
 
@@ -51,6 +55,8 @@ function makeRandom(seed) {
   };
 }
 const rnd = makeRandom(SEED);
+/** Sentinel: this target's closure takes no argument, so its generator has none to give. */
+const IGNORE = Symbol("no-argument");
 const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
 const int = (n) => Math.floor(rnd() * n);
 
@@ -142,6 +148,77 @@ function randomFormat() {
   return randomText(20, bias);
 }
 
+/* ------------------------------------------------- workbook mutation base */
+
+/**
+ * A real workbook, in memory. Container fuzzing mutates one part of this and
+ * re-reads it: that is where the styles, shared-strings and relationship loaders
+ * live, and they are the paths a fixture-based test only ever sees intact.
+ */
+const BASE_PARTS = (() => {
+  const bytes = writeWorkbookSync({
+    sheetNames: ["S", "T"],
+    sheets: [
+      { name: "S", rows: [[{ t: "string", v: "a" }, { t: "number", v: 1 }], [{ t: "string", v: "b" }]], originRow: 1, originCol: 0, rowCount: 2, columnCount: 2, merges: ["A1:B1"], columns: [{ width: 12 }], rowInfo: new Map() },
+      { name: "T", rows: [[{ t: "number", v: 9 }]], originRow: 1, originCol: 0, rowCount: 1, columnCount: 1, merges: [], columns: [], rowInfo: new Map() },
+    ],
+  });
+  const zip = new ZipArchive(bytes);
+  const parts = [];
+  for (const entry of zip.entries) {
+    parts.push([entry.name, /\.(xml|rels)$/.test(entry.name) ? entry.text() : entry.bytes()]);
+  }
+  return parts;
+})();
+
+/** Mutate one XML part: flip characters, truncate, inject markup, or blank it. */
+function mutateWorkbook() {
+  const parts = BASE_PARTS.map(([name, data]) => [name, data]);
+  const xmlIndexes = parts
+    .map(([name], i) => (/\.(xml|rels)$/.test(name) ? i : -1))
+    .filter((i) => i >= 0);
+  const which = xmlIndexes[int(xmlIndexes.length)];
+  const [name, original] = parts[which];
+  let text = String(original);
+  switch (int(6)) {
+    case 0: text = ""; break;
+    case 1: text = text.slice(0, int(text.length + 1)); break;
+    case 2: text = text.replace(/</g, () => (rnd() < 0.2 ? "" : "<")); break;
+    case 3: {
+      const at = int(text.length + 1);
+      text = text.slice(0, at) + randomText(20) + text.slice(at);
+      break;
+    }
+    case 4: text = text.replace(/="[^"]*"/g, () => (rnd() < 0.3 ? '="' + randomText(10) + '"' : '=""')); break;
+    default: {
+      // Duplicate a random slice: cheap way to grow nesting and repetition.
+      const at = int(text.length + 1);
+      text = text.slice(0, at) + text.slice(at, at + 40) + text.slice(at);
+      break;
+    }
+  }
+  parts[which] = [name, text];
+  try {
+    return storedZip(parts);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Relative time share per target.
+ *
+ * An equal split sounds fair and is not: the workbook target rebuilds a zip per
+ * case, so it gets a few thousand cases while "datetime" gets a million. The
+ * expensive targets are the ones covering the least-tested code, so they get a
+ * larger share.
+ */
+const TARGET_WEIGHT = {
+  workbook: 4,
+  sylk: 1, "sylk-raw": 1, dif: 1, "dif-raw": 1, dsv: 1,
+  csvToSheet: 1, numfmt: 1, "numfmt-fixed": 1, datetime: 1, address: 1,
+};
+
 const TARGETS = [
   ["sylk", (text) => sylkToSheet(text), randomSylk],
   ["sylk-raw", (text) => sylkToSheet(text), () => randomText(80)],
@@ -150,9 +227,10 @@ const TARGETS = [
   ["dsv", (text) => parseDSV(text, { delimiter: pick([",", ";", "\t", "|"]) }), () => randomText(120, "ab,\"\n\r; \t|\\")],
   ["csvToSheet", (text) => csvToSheet(text), () => randomText(120, "ab,\"\n\r\n")],
   ["numfmt", (value) => formatNumber(value, randomFormat()), () => (rnd() - 0.5) * Math.pow(10, int(20))],
-  ["numfmt-fixed", () => { const code = randomFormat(); formatNumber(1234.5678, code); isDateFormat(code); splitSections(code); pickSection(splitSections(code), 1, false); }, () => null],
-  ["datetime", () => formatDateTime(int(100000), randomFormat()), () => null],
-  ["address", () => { const a = randomText(8, "A-Z0-9$:"); try { decodeRange(a); } catch (e) { if (!(e instanceof GridxcelError)) throw e; } encodeCell(int(100), int(100)); }, () => null],
+  ["numfmt-fixed", () => { const code = randomFormat(); formatNumber(1234.5678, code); isDateFormat(code); splitSections(code); pickSection(splitSections(code), 1, false); }, () => IGNORE],
+  ["datetime", () => formatDateTime(int(100000), randomFormat()), () => IGNORE],
+  ["address", () => { const a = randomText(8, "A-Z0-9$:"); try { decodeRange(a); } catch (e) { if (!(e instanceof GridxcelError)) throw e; } encodeCell(int(100), int(100)); }, () => IGNORE],
+  ["workbook", (bytes) => readWorkbookSync(bytes), mutateWorkbook],
 ];
 
 /* --------------------------------------------------------------------- run */
@@ -162,10 +240,15 @@ const perTarget = {};
 
 for (const [label, parser, generator] of TARGETS) {
   let n = 0;
-  const until = Date.now() + Math.floor((SECONDS * 1000) / TARGETS.length);
+  const totalWeight = TARGETS.reduce((sum, [label]) => sum + (TARGET_WEIGHT[label] || 1), 0);
+  const share = Math.floor((SECONDS * 1000) * ((TARGET_WEIGHT[label] || 1) / totalWeight));
+  const until = Date.now() + share;
   while (Date.now() < until) {
     const input = generator();
-    probe(parser, label, input === null || input === undefined ? label : input);
+    // A generator may decline a case (an archive it could not build); that is not
+    // a parser result, so it is not counted.
+    if (input === null || input === undefined) continue;
+    probe(parser, label, input === IGNORE ? undefined : input);
     n++;
   }
   perTarget[label] = n;
