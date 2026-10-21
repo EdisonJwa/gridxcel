@@ -72,8 +72,10 @@ but never withdrawn. Two things make it safe.
 version is not valid semver, when it is already on the registry, when the git tag
 and the manifest disagree, when the tree is dirty, when a dependency has crept
 in, when an exports target does not exist, or when the packed tarball does not
-install and resolve every entry point. That last one is not redundant with the
-test suite: it is the only check that looks at what actually ships.
+install, resolve every entry point, and run a first-user script against the
+installed package - write, read, stream, format, CSV. That last part is not
+redundant with the test suite: it is the only check that exercises what actually ships
+the way a consumer would.
 
 **`.github/workflows/release.yml`** publishes from CI, triggered by a `v*` tag.
 Publishing from CI is not convenience - it is the only way to get npm provenance,
