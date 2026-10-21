@@ -142,6 +142,44 @@ try {
   const rootKeys = execFileSync(process.execPath, ["--input-type=module", "-e", probe], { cwd: consumer, encoding: "utf8" }).trim();
   check("the root entry point resolves from the tarball", Number(rootKeys) > 50, rootKeys + " exports");
 
+  // Does the installed package actually work? Resolving an entry point proves the
+  // file is there; it says nothing about whether read, write, streaming and
+  // formatting function together from a tarball. This is the closest check to a
+  // first user's experience, short of publishing.
+  const smoke = "smoke.mjs";
+  writeFileSync(
+    path.join(consumer, smoke),
+    [
+      'import { writeWorkbook, read, sheetToAOA, eachRow } from "' + pkg.name + '";',
+      'import { createCSVStream } from "' + pkg.name + '/csv";',
+      'import { formatNumber } from "' + pkg.name + '/numfmt";',
+      "const bytes = await writeWorkbook({ sheets: [{ name: \"S\", rows: [",
+      '  [{ t: "string", v: "a" }, { t: "number", v: 1200, z: "#,##0" }],',
+      "]} ] });",
+      "const book = await read(bytes);",
+      "const aoa = await sheetToAOA(book.sheets[0]);",
+      "let n = 0; for await (const row of eachRow(bytes)) n++;",
+      "const csv = await new Response(createCSVStream(book.sheets[0])).text();",
+      "const out = { sheets: book.sheetNames.length, aoa: aoa.length, streamed: n, formatted: formatNumber(1200, \"#,##0\"), csv: csv.trim().split(/\\r?\\n/)[0] };",
+      "if (out.sheets !== 1 || out.aoa !== 1 || out.streamed !== 1) { console.error(JSON.stringify(out)); process.exit(1); }",
+      "if (out.formatted !== \"1,200\") { console.error(\"formatNumber: \" + out.formatted); process.exit(1); }",
+      "if (out.csv !== \"a,units\" && out.csv !== \"a,1,200\") { console.error(\"csv: \" + out.csv); process.exit(1); }",
+      "console.log(JSON.stringify(out));",
+    ].join("\n"),
+  );
+  const smokeRun = (() => {
+    try {
+      return execFileSync(process.execPath, [smoke], { cwd: consumer, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    } catch (err) {
+      return { failed: String((err.stderr || err.message || "")).split("\n").slice(0, 3).join(" ") };
+    }
+  })();
+  check(
+    "the installed package reads, writes, streams and formats",
+    typeof smokeRun === "string",
+    typeof smokeRun === "string" ? smokeRun : smokeRun.failed,
+  );
+
   for (const specifier of Object.keys(pkg.exports || {})) {
     if (specifier === "." || specifier === "./package.json") continue;
     const name = pkg.name + "/" + specifier.replace(/^\.\//, "");
