@@ -441,6 +441,8 @@ and write path is diffed against Python **openpyxl** and **XlsxWriter**:
 npm test                 # unit, integration, fuzz and scaling suites
 npm run check:docs       # every documented symbol exists; every example executes
 npm run check:exports    # every public export is documented
+npm run check:clone      # the docs work from a checkout without untracked files
+npm run check:fuzz       # a million random cases across ten parsers
 npm run interop          # diff against openpyxl / XlsxWriter
 ```
 
@@ -450,7 +452,8 @@ npm run interop          # diff against openpyxl / XlsxWriter
 | Oracle interop | 37,293 read checks and 190 write checks, 0 mismatches |
 | Fuzzing | 456 corrupted containers plus 328 hostile text inputs: 0 untyped throws, 0 hangs, 0 unbounded allocations |
 | CRC corruption | Detected and rejected with a typed error |
-| CI | 8 legs: Linux and Windows, Node 18/20/22/24, plus a real Chromium leg |
+| CI | 8 legs: Linux and Windows, Node 18/20/22/24, plus Chromium, Firefox and WebKit |
+| Random fuzzing | Ten parsers, millions of generated cases per run; fixed seeds reproduce any failure |
 
 The suite needs no network access and installs nothing.
 

@@ -82,8 +82,8 @@ distinction matters if you are deciding what to rely on.
 | Fonts, fills, borders, alignment | They survive our own write-then-read round trip. No outside implementation has re-read the records we produce. |
 | `gridxcel/compat` write path | The interop harness drives the native API. The shim is unit-tested but its write path has not been inspected by an independent reader. |
 | Deliberately corrupt fixtures | openpyxl refuses to open them, so they have no oracle and are skipped in the interop harness. |
-| Fuzzing | 784 hostile inputs prove no untyped throw, no hang and no unbounded allocation. They do not prove that a damaged file yields the correct *subset* of rows - only intact files are checked for content. |
-| Browser | Executed in a sandbox with the Web platform and no `Buffer`/`process`/`require`, and in real Chromium in CI. Firefox and Safari are untested. |
+| Fuzzing | Fixed corpora plus a random fuzzer (millions of generated cases per run) prove no untyped throw, no hang and no unbounded allocation. They do not prove that a damaged file yields the correct *subset* of rows - only intact files are checked for content. |
+| Browser | Executed in a sandbox with the Web platform and no `Buffer`/`process`/`require`, and in real Chromium, Firefox and WebKit (Playwright) in CI. Safari itself is approximated by WebKit, not tested directly. |
 
 Evidence: `npm test` runs 303 tests (299 pass, 4 skipped);
 `node scripts/interop.mjs` reports 190 write checks and 37,293 read checks

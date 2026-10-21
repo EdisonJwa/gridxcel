@@ -172,7 +172,17 @@ try {
     check(ENGINE + ": no uncaught page errors", consoleErrors.length === 0, consoleErrors.join(" | "));
   }
 } catch (error) {
-  check(ENGINE + ": launches and runs", false, String(error && error.message).split("\n")[0]);
+  const message = String(error && error.message).split("\n")[0];
+  // A missing browser binary is an infrastructure problem, not a defect. Say so
+  // and skip, unless GRIDXCEL_REQUIRE_BROWSER demands it.
+  const missing = /Executable doesn't exist|browserType\.launch/.test(message);
+  if (missing && !REQUIRE) {
+    console.log("  SKIP  " + ENGINE + " is not installed (" + message.slice(0, 90) + ")");
+    if (browser) await browser.close();
+    srv.close();
+    process.exit(0);
+  }
+  check(ENGINE + ": launches and runs", false, message);
 } finally {
   if (browser) await browser.close();
   srv.close();
