@@ -35,16 +35,36 @@ function check(label, ok, detail) {
  * npm is npm.cmd on Windows and execFileSync refuses to spawn that without a
  * shell, which made this whole script fail before its first check.
  */
+/**
+ * Run a command.
+ *
+ * npm is a shell shim on Windows (.cmd), and Node will not spawn that without a
+ * shell. Passing shell:true alongside arguments is deprecated (DEP0190) because
+ * arguments are concatenated rather than escaped - so instead the npm CLI's own
+ * entry script is run through the current node binary. No shell is involved, no
+ * argument can be reinterpreted, and it is the same npm.
+ */
 function run(cmd, args, opts = {}) {
-  // Windows: npm is npm.cmd. Passing shell:true with args is deprecated (DEP0190)
-  // because the arguments are concatenated rather than escaped. Resolve the .cmd
-  // path instead and spawn it directly, so no shell is involved and nothing can be
-  // misinterpreted. Every argument here is a literal in this file, but a checker
-  // that models the right pattern is worth more than one that relies on that.
-  const executable = process.platform === "win32" && cmd === "npm" ? "npm.cmd" : cmd;
-  return execFileSync(executable, args, {
-    cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    ...opts,
+  if (cmd === "npm") {
+    // Try the npm CLI next to this node binary, then the one next to a real node
+    // found on PATH. In a normal shell the first hits; inside an Electron-hosted
+    // runner process.execPath is not node, so the PATH lookup is the fallback.
+    const candidates = [path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")];
+    try {
+      const which = process.platform === "win32" ? "where" : "which";
+      const found = execFileSync(which, ["node"], { encoding: "utf8", shell: false }).trim().split(/\r?\n/)[0];
+      candidates.push(path.join(path.dirname(found), "node_modules", "npm", "bin", "npm-cli.js"));
+    } catch { /* fall through to plain spawn */ }
+    for (const cli of candidates) {
+      if (cli && existsSync(cli)) {
+        return execFileSync(process.execPath, [cli, ...args], {
+          cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts,
+        }).trim();
+      }
+    }
+  }
+  return execFileSync(cmd, args, {
+    cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts,
   }).trim();
 }
 
