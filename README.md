@@ -449,7 +449,7 @@ npm run interop          # diff against openpyxl / XlsxWriter
 | Check | Result |
 | --- | --- |
 | Tests | 324 run, 320 pass, 0 fail, 4 skipped |
-| Oracle interop | 37,293 read checks and 190 write checks, 0 mismatches |
+| Oracle interop | 37,293 read checks and 380 write checks, 0 mismatches |
 | Fuzzing | 456 corrupted containers plus 328 hostile text inputs: 0 untyped throws, 0 hangs, 0 unbounded allocations |
 | CRC corruption | Detected and rejected with a typed error |
 | CI | 8 legs: Linux and Windows, Node 18/20/22/24, plus Chromium, Firefox and WebKit |

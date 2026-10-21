@@ -297,6 +297,10 @@ export async function runInterop(options = {}) {
   // "self" checks the harness itself (comparator sanity); always worth running.
   if (wantWrite) {
     const mod = writeMod.mod;
+    // The compat shim is a second write path with its own coercion rules, and the
+    // interop harness only ever drove the native one - so its output had never been
+    // looked at by an independent implementation. Fix that here, using the same
+    // specs and the same oracle checks.
     for (const spec of writeSpecs()) {
       const outFile = path.join(outDir, "gridxcel-" + spec.name + ".xlsx");
       rmSync(outFile, { force: true });
@@ -327,6 +331,46 @@ export async function runInterop(options = {}) {
       summary.write.mismatches.push(...entry.mismatches);
       summary.write.notes.push(...entry.notes);
       summary.write.specs.push(entry);
+    }
+
+    // The compat shim is a second write path with its own coercion rules, and this
+    // harness only ever drove the native one - so its output had never been looked
+    // at by an independent implementation. Same specs, same oracle checks, so a
+    // divergence between the two write paths shows up as a mismatch here.
+    const compatMod = await tryImport(path.join(root, "src", "compat.js"));
+    if (compatMod.ok) {
+      for (const spec of writeSpecs()) {
+        const outFile = path.join(outDir, "compat-" + spec.name + ".xlsx");
+        rmSync(outFile, { force: true });
+        let wrote = null;
+        let error = null;
+        try {
+          const bytes = compatMod.mod.write(spec.book, { bookType: "xlsx", type: "buffer" });
+          if (!bytes || bytes.length === 0) throw new Error("compat.write returned no bytes");
+          const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+          writeFileSync(outFile, u8);
+          wrote = u8.length;
+        } catch (err) {
+          error = (err?.stack ?? String(err)).split("\n").slice(0, 3).join(" | ");
+        }
+        const entry = { spec: "compat/" + spec.name, file: rel(outFile), bytes: wrote, checks: 0, ok: false, mismatches: [], notes: ["written through gridxcel/compat"] };
+        if (error) {
+          entry.mismatches.push({ check: "write", target: "compat/" + spec.name, field: "compat.write", expected: "bytes", actual: error });
+        } else {
+          const doc = inspect(root, outFile, { cached: true });
+          const res = checkWrittenFile(spec, doc);
+          entry.checks = res.checks;
+          entry.mismatches = res.mismatches;
+          entry.notes = [...entry.notes, ...res.notes];
+          if (res.dateConvention && !summary.dateConvention) summary.dateConvention = res.dateConvention;
+          else if (res.dateConvention && summary.dateConvention && res.dateConvention !== summary.dateConvention) summary.dateConvention = "mixed";
+        }
+        entry.ok = entry.mismatches.length === 0;
+        summary.write.checks += entry.checks;
+        summary.write.mismatches.push(...entry.mismatches);
+        summary.write.notes.push(...entry.notes);
+        summary.write.specs.push(entry);
+      }
     }
   }
 
