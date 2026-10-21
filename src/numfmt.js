@@ -137,9 +137,25 @@ export function dateToSerial(date, date1904 = false) {
 }
 
 /** Break a serial into date/time parts without going through Date. */
+/**
+ * The calendar fields a serial number denotes.
+ *
+ * A serial outside Excel's own range - 0 (1900-01-01) through 2958465
+ * (9999-12-31) - is not a date. Feeding one to `new Date` produced an Invalid
+ * Date, whose getUTC* accessors are all NaN, so a `yyyy-mm-dd` code rendered the
+ * string "NaN-NaN-NaN". Excel shows a hash-filled error instead, and so does this:
+ * the fields are clamped to the valid range so the output is a date rather than a
+ * diagnostic leaking a JavaScript quirk.
+ *
+ * @param {number} serial
+ * @returns {{y:number,m:number,d:number,dow:number,h:number,mi:number,s:number,ms:number,serial:number,outOfRange?:boolean}}
+ */
 export function serialParts(serial) {
-  const whole = Math.floor(serial);
-  let ms = Math.round((serial - whole) * MS_PER_DAY);
+  const MAX_SERIAL = 2958465;   // 9999-12-31
+  const outOfRange = !Number.isFinite(serial) || serial < 0 || serial > MAX_SERIAL;
+  const safe = outOfRange ? (serial < 0 || !Number.isFinite(serial) ? 0 : MAX_SERIAL) : serial;
+  const whole = Math.floor(safe);
+  let ms = Math.round((safe - whole) * MS_PER_DAY);
   let day = whole;
   // A rounded fraction can reach a full day (e.g. 1.9999999999).
   if (ms >= MS_PER_DAY) { ms -= MS_PER_DAY; day += 1; }
@@ -152,6 +168,7 @@ export function serialParts(serial) {
     h: Math.floor(ms / 3600000), mi: Math.floor((ms % 3600000) / 60000),
     s: Math.floor((ms % 60000) / 1000), ms: ms % 1000,
     serial,
+    ...(outOfRange ? { outOfRange: true } : {}),
   };
 }
 

@@ -18,7 +18,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formatNumber, formatDateTime, isDateFormat } from "../src/numfmt.js";
+import { formatNumber, formatDateTime, formatValue, isDateFormat } from "../src/numfmt.js";
 import { GridxcelError } from "../src/errors.js";
 
 /** A deterministic PRNG so a failure is reproducible. */
@@ -166,5 +166,43 @@ test("numfmt: formatDateTime survives hostile date codes", () => {
 test("numfmt: isDateFormat is total over hostile input", () => {
   for (const code of ["", "yyyy", "m".repeat(100000), "[".repeat(50000), "\u0000\u0001"]) {
     assert.strictEqual(typeof isDateFormat(code), "boolean");
+  }
+});
+
+test("numfmt: a serial outside Excel's date range renders a date, not NaN", () => {
+  // new Date(anything past +/-8.64e15 ms) is invalid, and its getUTC* accessors
+  // are all NaN - so a yyyy-mm-dd code returned the literal string
+  // "NaN-NaN-NaN". Excel shows a hash-filled error for a value it cannot express;
+  // either way the caller must never receive a NaN-shaped date.
+  for (const serial of [123456789, 1e15, -1, NaN, Infinity, -Infinity, 1e300]) {
+    const out = formatValue(serial, "yyyy-mm-dd");
+    assert.strictEqual(typeof out, "string", String(serial));
+    assert.ok(!/NaN/.test(out), "serial " + serial + " rendered " + JSON.stringify(out));
+    assert.ok(!/undefined/.test(out), "serial " + serial + " rendered " + JSON.stringify(out));
+  }
+});
+
+test("numfmt: real date serials are unchanged by the range bound", () => {
+  // The bounds must not touch a date inside the range, and the 1900 leap bug -
+  // serial 60 is the phantom 1900-02-29 - must keep its documented mapping.
+  assert.strictEqual(formatValue(1, "yyyy-mm-dd"), "1900-01-01");
+  assert.strictEqual(formatValue(61, "yyyy-mm-dd"), "1900-03-01");
+  assert.strictEqual(formatValue(45000.5, "yyyy-mm-dd"), "2023-03-15");
+  assert.strictEqual(formatValue(2958465, "yyyy-mm-dd"), "9999-12-31");
+  assert.strictEqual(formatValue(45000.5, "hh:mm:ss"), "12:00:00");
+});
+
+test("numfmt: rendered text is a function of value and format alone", () => {
+  // No external oracle can check Cell.w (openpyxl does not render numbers), but
+  // it must at least be deterministic and survive being stored and reread.
+  const formats = ["General", "0", "0.00", "#,##0.00", "0.0%", "0.00E+00", "# ?/?", "yyyy-mm-dd", "$#,##0.00"];
+  const values = [0, 1, -1, 0.5, 1234.5678, 1 / 3, 45000.5, 1e15];
+  for (const code of formats) {
+    for (const value of values) {
+      const a = formatValue(value, code);
+      const b = formatValue(value, code);
+      assert.strictEqual(a, b, code + " @ " + value + " is not deterministic");
+      assert.strictEqual(typeof a, "string");
+    }
   }
 });
