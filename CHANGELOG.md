@@ -9,6 +9,15 @@ All notable changes to gridxcel are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Random fuzzing in the gate, and a nightly job.** Every suite in `test/` uses a
+  fixed corpus, so it can only catch a regression. `scripts/fuzz-random.mjs` drives
+  ten parsers with generated input for a time budget under a seed that reproduces
+  any failure exactly; a 10-second run is 2.85 million cases. It runs for 5 seconds
+  in `npm run check` and for 60 seconds per target nightly on Node 18 and 22.
+- **The browser claim is now tested in three engines.** Chromium, Firefox and
+  WebKit each run read, write, `eachRow`, `createCSVStream` and the synchronous
+  path through a real esbuild bundle. Chromium alone cannot show an engine
+  difference in the Web compression streams that replace `node:zlib`.
 - **`createCSVStream`, a streaming CSV writer.** `sheetToCSV` is O(output) in
   retained memory - it builds every line and joins them - which on a 200,000 x 10
   sheet costs 14.3 MB for the string. The stream yields the same bytes a row at a
@@ -78,6 +87,31 @@ All notable changes to gridxcel are recorded here. The format follows
 
 ### Fixed
 
+- **A sparse row index made the writer walk two billion holes.** `addRow` looped
+  `for (j = 0; j < cells.length; j++)` on a row that is by contract a sparse
+  array. Writing to index 2^31-1 made length 2^31: 38 seconds for one row, then a
+  column reference no spreadsheet can open. Index 1e9 took 16 seconds. Bounded on
+  the way in with `RANGE_TOO_LARGE`; a row using columns A and Z, and the highest
+  legal column, are unchanged.
+- **Three characters of number-format code aborted the process.** `*"` left the
+  render loop spinning forever: `_.` and `*.` consume "this character and the
+  next", and they ran after quoted runs had been replaced by a NUL-delimited
+  marker, so they ate half of one and left a lone NUL. The loop then did
+  `i = indexOf(NUL, i+1)` (which is -1 when unpaired) and its own `i++` put it
+  back on the same character, appending nothing forever until the heap was gone -
+  exit 134, four gigabytes, not catchable. Directives now resolve in Excel's
+  precedence order before any marker exists, and an unpaired marker is skipped
+  rather than rewound onto.
+- **A fraction denominator drove a billion-iteration loop.** `maxDen` was
+  `10^len - 1` straight from the code, so `# ?/?????????` meant 999,999,999
+  iterations per cell. Capped at 999, which is Excel's own behaviour: 9 ms -> 0 ms.
+- **A long format code cost seconds per cell.** 100,000 numeric placeholders took
+  7.5 s. Excel caps a cell at 32,767 characters, so a longer code is refused with
+  `BAD_FORMAT`.
+- **A code with more than 100 decimal places threw a raw `RangeError`.** The count
+  came from the code and went straight into `toFixed`, which throws past 100 and
+  is not a `GridxcelError` - breaking the promise that every failure is typed.
+  Clamped to 30 (Excel's limit); scientific notation had the same hole.
 - **A lone surrogate was silently replaced with U+FFFD.** A JavaScript string can
   hold half of a UTF-16 pair; it has no UTF-8 encoding, and `TextEncoder`
   substitutes the replacement character without complaint - so `"a\\ud800b"` was
