@@ -36,9 +36,14 @@ function check(label, ok, detail) {
  * shell, which made this whole script fail before its first check.
  */
 function run(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, {
+  // Windows: npm is npm.cmd. Passing shell:true with args is deprecated (DEP0190)
+  // because the arguments are concatenated rather than escaped. Resolve the .cmd
+  // path instead and spawn it directly, so no shell is involved and nothing can be
+  // misinterpreted. Every argument here is a literal in this file, but a checker
+  // that models the right pattern is worth more than one that relies on that.
+  const executable = process.platform === "win32" && cmd === "npm" ? "npm.cmd" : cmd;
+  return execFileSync(executable, args, {
     cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    shell: process.platform === "win32",
     ...opts,
   }).trim();
 }
