@@ -457,6 +457,26 @@ npm run interop          # diff against openpyxl / XlsxWriter
 
 The suite needs no network access and installs nothing.
 
+## Releasing
+
+Published from CI, not from a laptop, and only from a `v*` tag. That is not
+convenience: npm provenance requires an OIDC token that only a CI provider can
+issue, so a local publish would be an unattested one.
+
+```sh
+npm run check:release     # 23 checks, including a first-user script against the packed tarball
+git tag v0.1.0
+git push origin v0.1.0    # the workflow publishes with provenance
+```
+
+The workflow refuses to publish when the tag and the manifest disagree, runs the
+full gate plus the Python oracle on a clean checkout first, and records the tarball
+URL and integrity digest in the run summary.
+
+An npm version cannot be withdrawn, only deprecated, so the first publish freezes
+whatever API surface it carries. See [CONTRIBUTING.md](CONTRIBUTING.md#releasing)
+for that decision.
+
 ## Documentation
 
 | Document | Contents |
