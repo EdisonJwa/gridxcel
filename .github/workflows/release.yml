@@ -12,6 +12,19 @@ name: Release
 #
 # Triggered by a tag, not by a push to main: the tag is the release decision, and
 # npm versions are immutable, so the decision should be deliberate and recorded.
+#
+# The NPM_TOKEN secret must be a GRANULAR ACCESS TOKEN with 2FA bypass, not a
+# classic "Automation" token and not one created from a session with 2FA prompt
+# enforcement. A token that requires a one-time password cannot publish from CI:
+# npm fails with EOTP after signing the provenance statement, having already
+# uploaded nothing. Granular tokens on npm ≥ 9.9 are the only kind that work here.
+#
+# Verified failure mode, for whoever reads this next: with an OTP-enforcing token,
+# the run reaches "publish Signed provenance statement", publishes the statement to
+# the transparency log, and then fails with
+#   npm error code EOTP
+#   npm error This operation requires a one-time password from your authenticator.
+# Nothing reaches the registry and the version stays available.
 
 on:
   push:
