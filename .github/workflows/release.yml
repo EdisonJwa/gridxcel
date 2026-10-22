@@ -65,10 +65,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           # Trusted publishing needs Node >= 22.14.0 and npm >= 11.5.1. The Node 22
-          # line ships npm 10.x, so the latest npm is installed below rather than
+          # line ships npm 10.x, so a newer npm is installed below rather than
           # relying on whatever the image happens to carry.
           node-version: "22.14.0"
-          registry-url: "https://registry.npmjs.org"
+          # registry-url is deliberately NOT set. It makes setup-node write an
+          # .npmrc containing //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+          # and export NODE_AUTH_TOKEN as a placeholder, and npm then prefers that
+          # token over OIDC - which silently publishes without provenance. npm's
+          # default registry is registry.npmjs.org anyway, so nothing is lost.
 
       # OIDC publishing silently falls back to token auth on older npm, which would
       # produce an unattested tarball while looking successful. Pin it.
@@ -108,16 +112,41 @@ jobs:
       - name: Confirm we are publishing through OIDC, not a token
         if: github.event_name == 'push' || inputs.dry_run == false
         run: |
+          failed=0
+
+          # An env token outranks OIDC in npm's own resolution order.
           if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::error::NODE_AUTH_TOKEN is set. That disables OIDC and publishes without provenance."
-            exit 1
+            echo "::error::NODE_AUTH_TOKEN is set in the environment. That takes priority over OIDC and publishes without provenance."
+            failed=1
           fi
+
+          # A token can also arrive through .npmrc, which is what setup-node's
+          # registry-url option writes. Checking only the env var would miss it.
+          for f in "${NPM_CONFIG_USERCONFIG:-}" "$HOME/.npmrc" ".npmrc"; do
+            [ -n "$f" ] && [ -f "$f" ] || continue
+            if grep -qE '^[^#]*_authToken' "$f" 2>/dev/null; then
+              echo "::error::$f contains an _authToken entry. Remove it so npm falls back to OIDC."
+              failed=1
+            fi
+          done
+
           if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-            echo "::error::No OIDC token request URL. id-token: write is missing or the runner is not GitHub-hosted."
+            echo "::error::No OIDC token request URL. id-token: write is missing, or this runner is not GitHub-hosted (self-hosted runners are not supported)."
+            failed=1
+          fi
+
+          npm_version=$(npm --version)
+          echo "npm version: $npm_version"
+          # 11.5.1 is the first version that can exchange an OIDC token at all.
+          if [ "$(printf '%s\n' 11.5.1 "$npm_version" | sort -V | head -1)" != "11.5.1" ]; then
+            echo "::error::npm $npm_version is older than 11.5.1; it cannot use trusted publishing."
+            failed=1
+          fi
+
+          if [ "$failed" -ne 0 ]; then
             exit 1
           fi
-          echo "OIDC is available and no npm token is set; npm will authenticate through the trusted publisher."
-          echo "npm version: $(npm --version)"
+          echo "OIDC is available and no npm token is configured; npm will authenticate through the trusted publisher."
 
       # prepublishOnly runs this again, but failing here means the log says which
       # gate failed rather than one line of npm output.
