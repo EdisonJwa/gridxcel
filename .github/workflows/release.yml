@@ -155,9 +155,59 @@ jobs:
 
       # No --provenance flag: trusted publishing generates provenance by default,
       # and passing it is redundant. No NODE_AUTH_TOKEN either, by design.
+      #
+      # Retried, because the registry is not always available. A 503 or a dropped
+      # OIDC exchange is not a defect in this package, and a release should not fail
+      # on one. A real rejection (E403, E409, EOTP, a version conflict) is not
+      # retried - those are decisions, not weather.
       - name: Publish
         if: github.event_name == 'push' || inputs.dry_run == false
-        run: npm publish --access public
+        run: |
+          set -eu
+          attempt=1
+          max=4
+          while [ "$attempt" -le "$max" ]; do
+            echo "::group::npm publish (attempt $attempt of $max)"
+            set +e
+            npm publish --access public
+            status=$?
+            set -e
+            echo "::endgroup::"
+            if [ "$status" -eq 0 ]; then
+              echo "Published on attempt $attempt."
+              exit 0
+            fi
+
+            # Only transient failures are worth another attempt.
+            #
+            # The pattern has to match the debug log format ("12 error code E503"),
+            # not the console format ("npm error code E503") - they differ, and an
+            # earlier version of this matched neither and would have retried nothing.
+            # Verified against both shapes, plus E403 and E409, which must not retry.
+            log=$(ls -t ~/.npm/_logs/*.log 2>/dev/null | head -1)
+            reason=""
+            if [ -n "$log" ]; then
+              reason=$(grep -hE '(error code E5[0-9][0-9]|error code E(NEEDAUTH|TIMEDOUT|CONNRESET|AI_AGAIN)|npm error code (E503|E504|ENEEDAUTH))' "$log" 2>/dev/null | head -4 || true)
+            fi
+
+            retryable=0
+            case "$reason" in
+              *E503*|*E504*|*ETIMEDOUT*|*ECONNRESET*|*EAI_AGAIN*|*ENEEDAUTH*) retryable=1 ;;
+            esac
+
+            if [ "$retryable" -ne 1 ]; then
+              echo "::error::npm publish failed for a reason that is not transient; not retrying."
+              [ -n "$reason" ] && echo "$reason"
+              exit 1
+            fi
+
+            echo "Transient registry failure; retrying."
+            [ -n "$reason" ] && echo "$reason"
+            sleep $((attempt * 20))
+            attempt=$((attempt + 1))
+          done
+          echo "::error::npm publish still failing after $max attempts with a transient error."
+          exit 1
 
       - name: Dry run
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run != false
