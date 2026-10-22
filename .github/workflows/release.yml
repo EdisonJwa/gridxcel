@@ -64,6 +64,26 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install openpyxl lxml XlsxWriter
 
+      # Prove the token works before the gate runs. A dry-run publish does NOT
+      # authenticate against the registry - it builds a tarball and stops - so a
+      # bad token would otherwise surface only on a real publish, after the gate
+      # has spent several minutes. npm whoami makes an authenticated request and
+      # fails immediately on an invalid or expired credential.
+      - name: Check the npm token
+        if: github.event_name == 'push' || inputs.dry_run == false
+        run: |
+          set +e
+          whoami_out=$(npm whoami 2>&1)
+          status=$?
+          set -e
+          if [ $status -ne 0 ]; then
+            echo "::error::NPM_TOKEN is missing, invalid or expired: $whoami_out"
+            exit 1
+          fi
+          echo "authenticated to npm as: $whoami_out"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       # prepublishOnly runs this again, but failing here means the log says which
       # gate failed rather than one line of npm output.
       - name: Full gate
