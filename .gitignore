@@ -37,3 +37,5 @@ Thumbs.db
 integration/cross-browser-entry.mjs
 out*.txt
 test-run-output.log
+# gh CLI local device state, not project source
+.local/
