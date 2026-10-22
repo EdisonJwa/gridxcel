@@ -4,9 +4,13 @@ All notable changes to gridxcel are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-0.1.0 has not been published to npm, so nothing in this file is released yet.
+## [0.1.0] - 2026-10-22
 
-## [Unreleased]
+The first published version. Install with `npm install gridxcel`.
+
+Published from a local machine after `npm publish` authenticated through the
+browser flow; the CI workflow is in place for later releases and gives npm
+provenance, which this first publish does not carry.
 
 ### Added
 - **A release workflow with provenance, and a local pre-flight.**`.github/workflows/release.yml`
