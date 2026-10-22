@@ -52,6 +52,40 @@ promised. Fixes are described in the advisory.
 | Unrepresentable values are refused | Writing `NaN` raises `GridxcelError` / `BAD_VALUE` instead of emitting invalid XML. |
 | Concurrent reads are independent | 32 simultaneous reads resolve correctly; there is no shared mutable state between them. |
 
+## The npm install warnings
+
+npm's static analysis flags two things when this package is installed. Both are
+accurate and both are expected; this section exists so nobody has to take that on
+trust.
+
+**Filesystem access.** `readFile`, `readSync` and `writeFile` are part of the
+public API: they open the path you pass them and nothing else. There is no
+directory walking, no scanning for files you did not name, no reading of
+environment or credential paths, and no writes outside the path you asked for. If
+you never call a path-taking function, no file is ever opened. In a browser build
+the whole filesystem layer is replaced by `src/platform.browser.js`, which throws
+`PlatformError [NOT_SUPPORTED]` instead of touching a disk.
+
+**URL strings.** All 18 URL-shaped strings in the shipped code are XML namespace
+identifiers required by the OOXML specification - `schemas.openxmlformats.org`,
+`purl.org`, `w3.org`. They are string constants written into document parts, never
+resolved, and never fetched. The package contains no fetch, no
+XMLHttpRequest, no Node http or https import, and no socket of any kind: a
+workbook never leaves the process unless your own code sends it somewhere. You can
+confirm this in one command:
+
+```sh
+grep -rE 'fetch|XMLHttpRequest|node:https?|WebSocket' node_modules/gridxcel/src/
+```
+
+It prints nothing.
+
+One change was made in response to the filesystem warning: `scripts/run-tests.mjs`
+is no longer included in the published tarball. It is the maintainer's test runner,
+it has no use in an installed package, and it was the only shipped file outside
+`src/` that did anything beyond documentation. The tarball went from 50 files to
+49 and now contains no JavaScript outside `src/`.
+
 ## What is not covered
 
 - **Size is a denial-of-service vector you have to manage.** A full parse

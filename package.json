@@ -58,8 +58,7 @@
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
-    "CODE_OF_CONDUCT.md",
-    "scripts/run-tests.mjs"
+    "CODE_OF_CONDUCT.md"
   ],
   "scripts": {
     "test": "node scripts/run-tests.mjs",
