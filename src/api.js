@@ -20,7 +20,16 @@ import { cellFromValue } from "./json.js";
 // though only the CSV/JSON output paths reach it.
 import { writeFileNode } from "./platform.js";
 
-export const VERSION = "0.1.0";
+/**
+ * The library version, as a literal.
+ *
+ * It cannot be read from package.json at runtime: that means `require` or an import
+ * assertion, neither of which survives a browser bundle, and this module is on the
+ * browser path. So it is a literal, and `npm run check:version` asserts it matches
+ * package.json - a version that disagrees with the manifest is worse than absent,
+ * because callers use it to report which build they are running.
+ */
+export const VERSION = "0.1.1";
 
 const lazy = new Map();
 

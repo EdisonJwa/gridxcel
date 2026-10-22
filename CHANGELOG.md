@@ -4,6 +4,21 @@ All notable changes to gridxcel are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-10-22
+
+No behaviour changes. This version exists to validate the npm trusted publisher:
+the connection is registered against this repository and workflow, and npm only
+confirms it after a successful publish from it. Publishing 0.1.1 does that, and
+every release from here on is attested through OIDC with no long-lived token.
+
+### Changed
+- The published tarball no longer contains `scripts/run-tests.mjs`. It is the
+  maintainer's test runner, has no use in an installed package, and was the only
+  shipped file outside `src/` that did anything but document. 50 files became 49.
+- `SECURITY.md` now answers the two warnings npm shows on install - filesystem
+  access and URL-shaped strings - with the reasoning and a command to verify the
+  second claim.
+
 ## [0.1.0] - 2026-10-22
 
 The first published version. Install with `npm install gridxcel`.
