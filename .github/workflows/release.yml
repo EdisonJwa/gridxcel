@@ -8,23 +8,29 @@ name: Release
 #   2. The gate runs on a clean checkout. A local publish runs it on a machine that
 #      has untracked fixtures, which is exactly how a doc example that read
 #      bench/fair-50000x8.xlsx went green locally and failed all eight CI legs.
-#   3. The credential is a repository secret, never a file on someone's disk.
+#   3. There is no long-lived credential at all: authentication is OIDC, exchanged
+#      for a token scoped to this workflow run that cannot be extracted or reused.
 #
 # Triggered by a tag, not by a push to main: the tag is the release decision, and
 # npm versions are immutable, so the decision should be deliberate and recorded.
 #
-# The NPM_TOKEN secret must be a GRANULAR ACCESS TOKEN with 2FA bypass, not a
-# classic "Automation" token and not one created from a session with 2FA prompt
-# enforcement. A token that requires a one-time password cannot publish from CI:
-# npm fails with EOTP after signing the provenance statement, having already
-# uploaded nothing. Granular tokens on npm ≥ 9.9 are the only kind that work here.
+# This workflow uses npm Trusted Publishing (OIDC), not a token. The connection is
+# registered against this repository, this filename, and the NPM_TOKEN environment,
+# and it is validated by publishing from it once.
 #
-# Verified failure mode, for whoever reads this next: with an OTP-enforcing token,
-# the run reaches "publish Signed provenance statement", publishes the statement to
-# the transparency log, and then fails with
-#   npm error code EOTP
-#   npm error This operation requires a one-time password from your authenticator.
-# Nothing reaches the registry and the version stays available.
+# Three requirements, each of which fails quietly if missed:
+#   - npm >= 11.5.1 and Node >= 22.14.0. The Node 22 image ships npm 10, where OIDC
+#     is unsupported and npm falls back to a token - producing an unattested
+#     tarball that still reports success. npm is upgraded explicitly below.
+#   - id-token: write, or there is no OIDC token to exchange.
+#   - NO NODE_AUTH_TOKEN in the environment. A token takes priority over OIDC, so
+#     setting one silently disables provenance. A step verifies this.
+#
+# History, because it cost a run to learn: an earlier version of this workflow
+# published with a 2FA-enforcing granular token and failed with EOTP *after* the
+# provenance statement had been signed and logged, having uploaded nothing. That is
+# what a token-based CI publish looks like when 2FA is on the account; OIDC avoids
+# the class entirely by not involving a user credential.
 
 on:
   push:
@@ -40,6 +46,11 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # The npm trusted publisher is registered against this environment name. If the
+    # job does not declare it, the OIDC subject that npm receives will not match the
+    # configured connection and authentication fails. The name is fixed on npm's
+    # side once created ("NPM_TOKEN"), so it is not renamed here.
+    environment: NPM_TOKEN
     permissions:
       # Required for provenance: the OIDC token is what npm uses to sign the
       # attestation that this tarball was built from this commit in this workflow.
@@ -53,8 +64,18 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          # Trusted publishing needs Node >= 22.14.0 and npm >= 11.5.1. The Node 22
+          # line ships npm 10.x, so the latest npm is installed below rather than
+          # relying on whatever the image happens to carry.
+          node-version: "22.14.0"
           registry-url: "https://registry.npmjs.org"
+
+      # OIDC publishing silently falls back to token auth on older npm, which would
+      # produce an unattested tarball while looking successful. Pin it.
+      - name: Install a trusted-publishing capable npm
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
 
       # The tag and the manifest must agree. Publishing 0.1.0 from a v0.2.0 tag
       # would put a version on the registry that no tag in the repository points
@@ -77,42 +98,41 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install openpyxl lxml XlsxWriter
 
-      # Prove the token works before the gate runs. A dry-run publish does NOT
-      # authenticate against the registry - it builds a tarball and stops - so a
-      # bad token would otherwise surface only on a real publish, after the gate
-      # has spent several minutes. npm whoami makes an authenticated request and
-      # fails immediately on an invalid or expired credential.
-      - name: Check the npm token
+      # Trusted publishing authenticates through OIDC, which npm only uses when no
+      # NODE_AUTH_TOKEN is in the environment - a token would take priority and the
+      # tarball would be published unattested while still looking successful.
+      #
+      # So this step deliberately checks that no token is set rather than that one
+      # works. Publishing with a token here would silently undo the whole point of
+      # the trusted publisher configuration.
+      - name: Confirm we are publishing through OIDC, not a token
         if: github.event_name == 'push' || inputs.dry_run == false
         run: |
-          set +e
-          whoami_out=$(npm whoami 2>&1)
-          status=$?
-          set -e
-          if [ $status -ne 0 ]; then
-            echo "::error::NPM_TOKEN is missing, invalid or expired: $whoami_out"
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::NODE_AUTH_TOKEN is set. That disables OIDC and publishes without provenance."
             exit 1
           fi
-          echo "authenticated to npm as: $whoami_out"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::error::No OIDC token request URL. id-token: write is missing or the runner is not GitHub-hosted."
+            exit 1
+          fi
+          echo "OIDC is available and no npm token is set; npm will authenticate through the trusted publisher."
+          echo "npm version: $(npm --version)"
 
       # prepublishOnly runs this again, but failing here means the log says which
       # gate failed rather than one line of npm output.
       - name: Full gate
         run: npm run check && npm run interop
 
+      # No --provenance flag: trusted publishing generates provenance by default,
+      # and passing it is redundant. No NODE_AUTH_TOKEN either, by design.
       - name: Publish
         if: github.event_name == 'push' || inputs.dry_run == false
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       - name: Dry run
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run != false
-        run: npm publish --provenance --access public --dry-run
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --dry-run
 
       - name: Record what was published
         if: github.event_name == 'push'
